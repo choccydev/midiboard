@@ -1,44 +1,17 @@
+use std::collections::HashMap;
+
 use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+pub struct ConfigFile {
+    pub schema: String,
+    pub config: Vec<Config>,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub device: String,
-    pub controls: Controls,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Controls {
-    pub light: Light,
-    pub audio: Audio,
-    pub monitor: Monitor,
-    pub system: System,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Light {
-    pub intensity: Input,
-    pub hue: Input,
-    pub mode: Input,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Audio {
-    pub volume: Input,
-    pub song: Input,
-    pub pause: Input,
-    pub mute: Input,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Monitor {
-    pub brightness: Input,
-    pub mode: Input,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct System {
-    pub suspend: Input,
-    pub lock: Input,
+    pub controls: HashMap<String, Input>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -58,6 +31,13 @@ pub struct EncoderCommand {
 pub struct SwitchCommand {
     pub on: String,
     pub off: String,
+    pub initial_state: InitialSwitchState,
+}
+
+#[derive(Debug, Deserialize)]
+pub enum InitialSwitchState {
+    ON,
+    OFF,
 }
 
 #[derive(Debug, Deserialize)]
