@@ -1,0 +1,123 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/aordano/control-board/master/schema/midiboard.schema.json",
+    "title": "Midiboard Config",
+    "description": "Configuration file for the midiboard MIDI control CLI tool",
+    "type": "object",
+    "properties": {
+        "$schema": {
+            "description": "Validation Schema for this file",
+            "type": "string",
+            "const": "https://raw.githubusercontent.com/aordano/control-board/master/schema/midiboard.schema.json",
+            "default": "https://raw.githubusercontent.com/aordano/control-board/master/schema/midiboard.schema.json"
+        },
+        "config": {
+            "description": "The actual configuration data. It's an array containing multiple possible devices and their controls.",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "device": {
+                        "description": "The exact name of the MIDI device to listen, as the system reads it.",
+                        "type": "string"
+                    },
+                    "controls": {
+                        "description": "Actual control entries to listen for. List a unique, memorable name per entry.",
+                        "type": "object",
+                        "patternProperties": {
+                            "^[a-z]{1}[a-z0-9_]+": {
+                                "oneOf": [
+                                    {
+                                        "type": "object",
+                                        "description": "Entry for control. It can be of either Encoder or Switch type according to the action performed on the device.",
+                                        "properties": {
+                                            "key": {
+                                                "description": "Key of the selected MIDI controller to listen for.",
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 128,
+                                                "exclusiveMaximum": true
+                                            },
+                                            "kind": {
+                                                "description": "Kind of action to perform. Encoder reads increments or decrements, sampling several inputs and executing the command if an increment or decrement is detected.",
+                                                "type": "string",
+                                                "const": "Encoder"
+                                            },
+                                            "command": {
+                                                "type": "object",
+                                                "description": "Commands to execute on increase or decrease of the encoder value.",
+                                                "properties": {
+                                                    "increase": {
+                                                        "description": "Command to be executed by Bash on detection of an increase in the encoder value.",
+                                                        "type": "string"
+                                                    },
+                                                    "decrease": {
+                                                        "description": "Command to be executed by Bash on detection of an decrease in the encoder value.",
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "additionalProperties": false,
+                                                "required": [
+                                                    "increase",
+                                                    "decrease"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "type": "object",
+                                        "description": "Entry for control. It can be of either Encoder or Switch type according to the action performed on the device.",
+                                        "properties": {
+                                            "key": {
+                                                "description": "Key of the selected MIDI controller to listen for.",
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 128,
+                                                "exclusiveMaximum": true
+                                            },
+                                            "kind": {
+                                                "description": "Kind of action to perform. Switch starts with the given state by default and reads an input, toggling the state and executing the corresponding command immediately.",
+                                                "type": "string",
+                                                "const": "Switch"
+                                            },
+                                            "command": {
+                                                "type": "object",
+                                                "description": "Commands to execute on a press of the switch.",
+                                                "properties": {
+                                                    "on": {
+                                                        "description": "Command to be executed by Bash after triggering an ON event.",
+                                                        "type": "string"
+                                                    },
+                                                    "off": {
+                                                        "description": "Command to be executed by Bash after triggering an OFF event.",
+                                                        "type": "string"
+                                                    },
+                                                    "initial_state": {
+                                                        "description": "Default state to be assumed at the start of the application.",
+                                                        "type": "string",
+                                                        "enum": ["ON", "OFF"]
+                                                    }
+                                                },
+                                                "additionalProperties": false,
+                                                "required": [
+                                                    "on",
+                                                    "off",
+                                                    "initial_state"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "required": ["device", "controls"]
+            }
+        },
+        "required": ["config"]
+    }
+}
