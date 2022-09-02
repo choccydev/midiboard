@@ -45,6 +45,25 @@ pub struct System {
 pub struct Input {
     pub key: u8,
     pub kind: InputType,
+    pub command: Command,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EncoderCommand {
+    pub increase: String,
+    pub decrease: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SwitchCommand {
+    pub on: String,
+    pub off: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub enum Command {
+    EncoderCommand,
+    SwitchCommand,
 }
 
 #[derive(Debug, Deserialize)]
