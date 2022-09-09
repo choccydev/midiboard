@@ -8,7 +8,6 @@ pub struct Asset;
 
 #[derive(Debug, Deserialize)]
 pub struct ConfigFile {
-    //    pub schema: String,
     pub config: Vec<Config>,
 }
 
@@ -21,7 +20,6 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 pub struct Input {
     pub key: u8,
-    //    pub kind: InputType,
     pub command: Command,
 }
 
@@ -43,10 +41,4 @@ pub enum Command {
         off: String,
         initial_state: InitialSwitchState,
     },
-}
-
-#[derive(Debug, Deserialize)]
-pub enum InputType {
-    Encoder,
-    Switch,
 }

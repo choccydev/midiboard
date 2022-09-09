@@ -1,7 +1,6 @@
 use super::types;
 use super::util;
-use colored::*;
-use config::{Config, ConfigError};
+use config::ConfigError;
 use home::home_dir;
 use std::error::Error;
 use std::fs;
@@ -9,8 +8,6 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub fn run(cli: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
-    // TODO do stuff
-
     let generate = cli.is_present("generate");
     let validate = cli.is_present("validate");
     let path = cli.get_one::<String>("path");
@@ -58,9 +55,8 @@ fn validate_config(path: Option<&String>) -> Result<(), Box<dyn Error>> {
     let config = util::read_user_config(path);
 
     return match config {
-        Ok(config_file) => {
+        Ok(_) => {
             util::stdout("success", "Config file validated correctly.");
-            print!("{:?}", config_file);
             Ok(())
         }
         Err(error) => Err(Box::new(error)),
