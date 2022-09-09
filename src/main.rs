@@ -121,7 +121,7 @@ fn main() {
     }
 }
 
-fn run(cli: clap::ArgMatches) -> Result<(), String> {
+fn run(cli: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     // TODO do stuff
 
     return match cli.subcommand() {

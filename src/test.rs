@@ -1,6 +1,7 @@
 use super::util;
+use std::error::Error;
 
-pub fn run(cli: &clap::ArgMatches) -> Result<(), String> {
+pub fn run(cli: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     // TODO do stuff
 
     match cli.subcommand() {
