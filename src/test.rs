@@ -1,26 +1,49 @@
 use super::util;
-use midir::{Ignore, MidiInput, MidiInputConnection};
+use midir::{Ignore, MidiInput};
 use std::error::Error;
 use std::io::stdin;
 
 pub fn run(cli: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
-    let generate = cli.is_present("list");
-    let validate = cli.is_present("listen");
-    let device = cli
-        .get_one::<String>("listen")
-        .ok_or("No device name provided")?
-        .to_string();
+    let list = cli.contains_id("list");
+    let listen = cli.contains_id("listen");
 
-    if generate {
-        todo!();
-        //return list_devices(path);
+    if list {
+        return list_devices();
     }
 
-    if validate {
+    if listen {
+        let device = cli
+            .get_one::<String>("listen")
+            .ok_or("No device name provided")?
+            .to_string();
         return listen_to_device(device);
     }
 
     panic!("No valid argument provided to the config subcommand.")
+}
+
+pub fn list_devices() -> Result<(), Box<dyn Error>> {
+    let mut midi_in = MidiInput::new("midir reading input")?;
+    midi_in.ignore(Ignore::None);
+
+    util::stdout("info", "Currently connected devices:\n");
+
+    let in_ports = midi_in.ports();
+    match in_ports.len() {
+        0 => return Err("No input port found".into()),
+        _ => {
+            for (_i, p) in in_ports.iter().enumerate() {
+                util::stdout(
+                    "",
+                    &midi_in
+                        .port_name(p)?
+                        .split_terminator(':')
+                        .collect::<Vec<&str>>()[0],
+                )
+            }
+        }
+    };
+    return Ok(());
 }
 
 pub fn listen_to_device(device: String) -> Result<(), Box<dyn Error>> {
