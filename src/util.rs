@@ -102,11 +102,12 @@ pub fn stdout(selector: &str, message: &str) {
     }
 }
 
-pub fn load_midi() -> Result<MidiInputConnection<()>, Box<dyn Error>> {
+pub fn open_midi(
+    path: Option<&String>,
+    device: String,
+) -> Result<MidiInputConnection<()>, Box<dyn Error>> {
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
-
-    let config = read_user_config()?.try_deserialize::<types::Config>()?;
 
     // Get an input port (read from config file)
     let in_ports = midi_in.ports();
@@ -121,7 +122,7 @@ pub fn load_midi() -> Result<MidiInputConnection<()>, Box<dyn Error>> {
                     .unwrap()
                     .as_str()
                     .to_lowercase()
-                    .contains(&config.device.to_lowercase())
+                    .contains(&device.to_lowercase())
                 {
                     selected_port = i;
                 }
