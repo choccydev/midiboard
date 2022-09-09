@@ -1,13 +1,13 @@
 use super::types;
 use super::util;
+use anyhow::Error;
 use config::ConfigError;
 use home::home_dir;
-use std::error::Error;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub fn run(cli: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
     let generate = cli.is_present("generate");
     let validate = cli.is_present("validate");
     let path = cli.get_one::<String>("path");
@@ -23,8 +23,9 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     panic!("No valid argument provided to the config subcommand.")
 }
 
-fn generate_config(path: Option<&String>) -> Result<(), Box<dyn Error>> {
-    let skeleton = types::Asset::get("midiboard.json").ok_or("Could not load the skeleton file")?;
+fn generate_config(path: Option<&String>) -> Result<(), Error> {
+    let skeleton = types::Asset::get("midiboard.json")
+        .ok_or(Error::msg("Could not load the skeleton file"))?;
     let mut fullpath = PathBuf::new();
 
     match path {
@@ -40,18 +41,20 @@ fn generate_config(path: Option<&String>) -> Result<(), Box<dyn Error>> {
     }
     return match Path::try_exists(&fullpath) {
         Ok(exists) => match exists {
-            true => Err(Box::new(ConfigError::Message(String::from(
-                util::string_to_sstr(format!("File already exists in path {:?}", fullpath)),
+            true => Err(Error::msg(util::string_to_sstr(format!(
+                "File already exists in path {:?}",
+                fullpath
             )))),
             false => Ok(fs::write(fullpath, skeleton.data)?),
         },
-        Err(_) => Err(Box::new(ConfigError::Message(String::from(
-            util::string_to_sstr(format!("Cannot access path {:?}", fullpath)),
+        Err(_) => Err(Error::msg(util::string_to_sstr(format!(
+            "Cannot access path {:?}",
+            fullpath
         )))),
     };
 }
 
-fn validate_config(path: Option<&String>) -> Result<(), Box<dyn Error>> {
+fn validate_config(path: Option<&String>) -> Result<(), Error> {
     let config = util::read_user_config(path);
 
     return match config {
@@ -59,6 +62,6 @@ fn validate_config(path: Option<&String>) -> Result<(), Box<dyn Error>> {
             util::stdout("success", "Config file validated correctly.");
             Ok(())
         }
-        Err(error) => Err(Box::new(error)),
+        Err(error) => Err(Error::from(error)),
     };
 }

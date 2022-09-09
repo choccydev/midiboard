@@ -1,9 +1,9 @@
 use super::util;
+use anyhow::Error;
 use midir::{Ignore, MidiInput};
-use std::error::Error;
 use std::io::stdin;
 
-pub fn run(cli: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
+pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
     let list = cli.contains_id("list");
     let listen = cli.contains_id("listen");
 
@@ -14,7 +14,7 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     if listen {
         let device = cli
             .get_one::<String>("listen")
-            .ok_or("No device name provided")?
+            .ok_or(Error::msg("No device name provided"))?
             .to_string();
         return listen_to_device(device);
     }
@@ -22,7 +22,7 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     panic!("No valid argument provided to the config subcommand.")
 }
 
-pub fn list_devices() -> Result<(), Box<dyn Error>> {
+pub fn list_devices() -> Result<(), Error> {
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
@@ -30,7 +30,7 @@ pub fn list_devices() -> Result<(), Box<dyn Error>> {
 
     let in_ports = midi_in.ports();
     match in_ports.len() {
-        0 => return Err("No input port found".into()),
+        0 => return Err(Error::msg("No devices found.")),
         _ => {
             for (_i, p) in in_ports.iter().enumerate() {
                 util::stdout(
@@ -46,13 +46,13 @@ pub fn list_devices() -> Result<(), Box<dyn Error>> {
     return Ok(());
 }
 
-pub fn listen_to_device(device: String) -> Result<(), Box<dyn Error>> {
+pub fn listen_to_device(device: String) -> Result<(), Error> {
     let mut input = String::new();
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
     let in_ports = midi_in.ports();
     let in_port = match in_ports.len() {
-        0 => return Err("No input port found".into()),
+        0 => return Err(Error::msg("No devices found.")),
         _ => {
             let mut selected_port = 0;
 
@@ -67,13 +67,15 @@ pub fn listen_to_device(device: String) -> Result<(), Box<dyn Error>> {
                     selected_port = i;
                 }
             }
-            in_ports.get(selected_port).ok_or("Device not found")?
+            in_ports
+                .get(selected_port)
+                .ok_or(Error::msg("Device not found."))?
         }
     };
 
     util::stdout("info", "Opening connection...");
 
-    let _conn = midi_in.connect(
+    let _conn = match midi_in.connect(
         in_port,
         "midir-read-input",
         move |_stamp, message, _| {
@@ -83,7 +85,10 @@ pub fn listen_to_device(device: String) -> Result<(), Box<dyn Error>> {
             );
         },
         (),
-    )?;
+    ) {
+        Ok(connect) => connect,
+        Err(error) => return Err(Error::msg(error.to_string())),
+    };
 
     util::stdout(
         "success",

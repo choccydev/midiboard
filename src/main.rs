@@ -1,7 +1,7 @@
-use clap::{arg, value_parser, Arg, Command};
+use anyhow::Error;
+use clap::{Arg, Command};
 use colored::*;
-use std::error::Error;
-use std::{env, fs, io, process};
+use std::process;
 
 mod config;
 mod run;
@@ -9,12 +9,9 @@ mod test;
 mod types;
 mod util;
 
-use midir::{Ignore, MidiInput, MidiInputConnection};
-
-// TODO Update this shit please
 fn main() {
     let matches = Command::new("midiboard")
-        .version("0.3.0")
+        .version("0.5.0")
         .author(util::string_to_sstr(format!("{}", "Agata Ordano - aordano@protonmail.com".bright_cyan())))
         .about("Utility that allows using an arbitrary MIDI controller as a control board.")
         .long_about(concat! ("This utility helps with the execution of frequent or specific tasks to be done using a MIDI controller to execute user-provided commands.\n", 
@@ -55,7 +52,6 @@ fn main() {
                 .help("Listens to the given MIDI device and outputs all events to stdout.")
             )
         )
-        // TODO
         .subcommand(
             Command::new("config")
                 .alias("settings")
@@ -99,7 +95,6 @@ fn main() {
                 .help("Selects a custom path for the config file.")
             )
         )
-        // TODO
         .subcommand(
             Command::new("run")
                 .alias("listen")
@@ -131,13 +126,11 @@ fn main() {
     }
 }
 
-fn run(cli: clap::ArgMatches) -> Result<(), Box<dyn Error>> {
-    // TODO do stuff
-
+fn run(cli: clap::ArgMatches) -> Result<(), Error> {
     return match cli.subcommand() {
         Some(("test", sub_m)) => test::run(sub_m),
         Some(("run", sub_m)) => run::run(sub_m),
         Some(("config", sub_m)) => config::run(sub_m),
-        _ => Ok(()), //Some(("", sub_m)) => util::stdout("warning", "Please provide a subcommand. You can call this tool without arguments or with the --help flag for more information.")
+        _ => Ok(()),
     };
 }
