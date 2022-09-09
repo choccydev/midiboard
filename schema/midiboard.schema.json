@@ -24,7 +24,7 @@
                         "type": "string"
                     },
                     "controls": {
-                        "description": "Actual control entries to listen for. List a unique, memorable name per entry.",
+                        "description": "Actual control entries to listen for. List a unique, memorable name per entry. Only lowercase, numbers and low dash allowed.",
                         "type": "object",
                         "patternProperties": {
                             "^[a-z]{1}[a-z0-9_]+": {
@@ -40,15 +40,15 @@
                                                 "maximum": 128,
                                                 "exclusiveMaximum": true
                                             },
-                                            "kind": {
-                                                "description": "Kind of action to perform. Encoder reads increments or decrements, sampling several inputs and executing the command if an increment or decrement is detected.",
-                                                "type": "string",
-                                                "const": "Encoder"
-                                            },
                                             "command": {
                                                 "type": "object",
                                                 "description": "Commands to execute on increase or decrease of the encoder value.",
                                                 "properties": {
+                                                    "kind": {
+                                                        "description": "Kind of action to perform. Encoder reads increments or decrements, sampling several inputs and executing the command if an increment or decrement is detected.",
+                                                        "type": "string",
+                                                        "const": "Encoder"
+                                                    },
                                                     "increase": {
                                                         "description": "Command to be executed by Bash on detection of an increase in the encoder value.",
                                                         "type": "string"
@@ -61,7 +61,8 @@
                                                 "additionalProperties": false,
                                                 "required": [
                                                     "increase",
-                                                    "decrease"
+                                                    "decrease",
+                                                    "kind"
                                                 ]
                                             }
                                         }
@@ -77,15 +78,15 @@
                                                 "maximum": 128,
                                                 "exclusiveMaximum": true
                                             },
-                                            "kind": {
-                                                "description": "Kind of action to perform. Switch starts with the given state by default and reads an input, toggling the state and executing the corresponding command immediately.",
-                                                "type": "string",
-                                                "const": "Switch"
-                                            },
                                             "command": {
                                                 "type": "object",
                                                 "description": "Commands to execute on a press of the switch.",
                                                 "properties": {
+                                                    "kind": {
+                                                        "description": "Kind of action to perform. Switch starts with the given state by default and reads an input, toggling the state and executing the corresponding command immediately.",
+                                                        "type": "string",
+                                                        "const": "Switch"
+                                                    },
                                                     "on": {
                                                         "description": "Command to be executed by Bash after triggering an ON event.",
                                                         "type": "string"
@@ -104,7 +105,8 @@
                                                 "required": [
                                                     "on",
                                                     "off",
-                                                    "initial_state"
+                                                    "initial_state",
+                                                    "kind"
                                                 ]
                                             }
                                         }
