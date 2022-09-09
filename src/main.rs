@@ -88,6 +88,16 @@ fn main() {
                 .conflicts_with("validate")
                 .help("Generates a skeleton config file.")
             )
+            .arg(
+                Arg::new("path")
+                .short('p')
+                .long("path")
+                .value_name("CONFIG FILE")
+                .alias("file")
+                .takes_value(true)
+                .multiple_values(false)
+                .help("Selects a custom path for the config file.")
+            )
         )
         // TODO
         .subcommand(
@@ -102,17 +112,17 @@ fn main() {
                 concat!(", but you can select an alternative path if desired.")
             )
             ))
+            .arg(
+                Arg::new("path")
+                .short('p')
+                .long("path")
+                .value_name("CONFIG FILE")
+                .alias("file")
+                .takes_value(true)
+                .multiple_values(false)
+                .help("Selects a custom path for the config file.")
+            )
             .arg_required_else_help(false)
-        )
-        .arg(
-            Arg::new("path")
-            .short('p')
-            .long("path")
-            .value_name("CONFIG FILE")
-            .alias("file")
-            .takes_value(true)
-            .multiple_values(false)
-            .help("Selects a custom path for the config file.")
         )
         .get_matches();
     if let Err(error) = run(matches) {

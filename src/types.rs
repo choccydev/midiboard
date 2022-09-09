@@ -1,6 +1,9 @@
+use rust_embed::RustEmbed;
 use std::collections::HashMap;
 
-use serde::Deserialize;
+#[derive(RustEmbed, Debug)]
+#[folder = "schema/"]
+pub struct Asset;
 
 #[derive(Debug, Deserialize)]
 pub struct ConfigFile {
