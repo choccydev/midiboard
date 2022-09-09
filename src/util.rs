@@ -7,25 +7,32 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::{env, fs, io, process};
 
-pub fn read_user_config() -> Result<Config, ConfigError> {
-    let mut path = PathBuf::new();
+pub fn read_user_config(path: Option<&String>) -> Result<types::ConfigFile, ConfigError> {
+    let mut fullpath = PathBuf::new();
 
-    // TODO add custom path reading option
-    // TODO Uncomment this line after all main features are added and this won't change further
-    //path.push(home_dir().ok_or(ConfigError::Message(String::from("Could not parse path")))?);
-    path.push("midiboard");
-    path.set_extension("json");
+    match path {
+        None => {
+            fullpath.push(
+                home_dir().ok_or(ConfigError::Message(String::from("Could not parse path")))?,
+            );
+            fullpath.push("midiboard");
+            fullpath.set_extension("json");
+        }
+        Some(path) => fullpath.push(path),
+    }
 
     // load and return the config
     let config = Config::builder()
         .add_source(config::File::new(
-            path.as_os_str()
+            fullpath
+                .as_os_str()
                 .to_str()
                 .ok_or(ConfigError::Message(String::from("Could not parse path")))?,
-            config::FileFormat::Json5,
+            config::FileFormat::Json,
         ))
         .build();
-    return config;
+    let parsed_config = config?.try_deserialize::<types::ConfigFile>();
+    return parsed_config;
 }
 
 // From https://stackoverflow.com/a/52367953/16134348

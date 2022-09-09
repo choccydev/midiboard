@@ -54,4 +54,15 @@ fn generate_config(path: Option<&String>) -> Result<(), Box<dyn Error>> {
     };
 }
 
+fn validate_config(path: Option<&String>) -> Result<(), Box<dyn Error>> {
+    let config = util::read_user_config(path);
+
+    return match config {
+        Ok(config_file) => {
+            util::stdout("success", "Config file validated correctly.");
+            print!("{:?}", config_file);
+            Ok(())
+        }
+        Err(error) => Err(Box::new(error)),
+    };
 }
