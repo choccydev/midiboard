@@ -15,6 +15,19 @@ pub struct ConfigFile {
 pub struct Config {
     pub device: String,
     pub controls: HashMap<String, Input>,
+    pub thresholds: Thresholds,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Thresholds {
+    encoder: TimeThreshold,
+    switch: TimeThreshold,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TimeThreshold {
+    activation: u32,
+    detection: u32,
 }
 
 #[derive(Debug, Deserialize)]

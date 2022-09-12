@@ -115,9 +115,62 @@
                             }
                         },
                         "additionalProperties": false
+                    },
+                    "thresholds": {
+                        "type": "object",
+                        "description": "Time thresholds for activation and detection of the controls.",
+                        "properties": {
+                            "encoder": {
+                                "type": "object",
+                                "description": "Time thresholds for activation and detecion of encoder controls.",
+                                "properties": {
+                                    "activation": {
+                                        "description": "Activation threshold in milliseconds for a encoder control. This is the total time elapsed since the first detection of the associated key without triggering a new command. Encoder activation time should usually lie between 500ms and 2000ms.",
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 5000,
+                                        "default": 750
+                                    },
+                                    "detection": {
+                                        "description": "Detection threshold in milliseconds for a encoder control. This is the minimum time elapsed needed since the last detection of the key, to trigger a new detection. Encoder detection time should usually lie between 50 and 250 ms.",
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 500,
+                                        "default": 300
+                                    }
+                                },
+                                "additionalProperties": false,
+                                "required": ["detection", "activation"]
+                            },
+                            "switch": {
+                                "type": "object",
+                                "description": "Time thresholds for activation and detecion of switch controls.",
+                                "properties": {
+                                    "activation": {
+                                        "description": "Activation threshold in milliseconds for a switch control. This is the total time elapsed since the first detection of the key that will be considered for detections without triggering a new command. Switches should usually lie between 400ms and 1000ms.",
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 5000,
+                                        "default": 1000
+                                    },
+                                    "detection": {
+                                        "description": "Detection threshold in milliseconds for a switch control. This is the minimum time elapsed needed since the last detection of the key, to trigger a new detection. Switch detection time should usually lie between 10 and 70 ms. To completely nullify debouncing and avoid marking detections, you can set it to an equal or higher value than the activation threshold.",
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 5000,
+                                        "default": 1000
+                                    }
+                                },
+                                "additionalProperties": false,
+                                "required": ["detection", "activation"]
+                            }
+                        },
+                        "additionalProperties": false,
+                        "required": ["encoder", "switch"]
                     }
                 },
-                "required": ["device", "controls"]
+                "additionalProperties": false,
+                "required": ["device", "controls", "thresholds"]
             }
         },
         "required": ["config"]

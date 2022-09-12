@@ -1,13 +1,23 @@
 {
-    "$schema": "https://raw.githubusercontent.com/aordano/control-board/master/schema/midiboard.schema.json",
+    "$schema": "./midiboard.schema.json",
     "config": [
         {
             "device": "Your Device Here",
+            "thresholds": {
+                "encoder": {
+                    "activation": 750,
+                    "detection": 300
+                },
+                "switch": {
+                    "activation": 1000,
+                    "detection": 1000
+                }
+            },
             "controls": {
                 "volume": {
                     "key": 0,
-                    "kind": "Encoder",
                     "command": {
+                        "kind": "Encoder",
                         "decrease": "pactl set-sink-volume @DEFAULT_SINK@ -3%",
                         "increase": "pactl set-sink-volume @DEFAULT_SINK@ +3%"
                     }
@@ -16,14 +26,15 @@
                     "key": 0,
                     "kind": "Encoder",
                     "command": {
+                        "kind": "Encoder",
                         "decrease": "playerctl previous",
                         "increase": "playerctl next"
                     }
                 },
                 "pause": {
-                    "kind": "Switch",
                     "key": 0,
                     "command": {
+                        "kind": "Switch",
                         "on": "playerctl stop",
                         "off": "playerctl play",
                         "initial_state": "ON"
