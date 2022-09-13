@@ -1,6 +1,8 @@
 use super::types;
+use chrono;
 use colored::*;
 use config::{Config, ConfigError};
+use core::time;
 use home::home_dir;
 use std::path::PathBuf;
 use std::process;
@@ -39,61 +41,62 @@ pub fn string_to_sstr(s: String) -> &'static str {
 }
 
 pub fn stdout(selector: &str, message: &str) {
+    let time = chrono::offset::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     // TODO implement IO error handling
     match selector {
         "info" => {
             println!(
-                "{}{} {}",
-                "[control-board]".bright_blue().bold(),
-                "[info]".bright_blue(),
+                "{} {} {}",
+                format!("[{}]", time).as_str().magenta(),
+                "[INFO]".bright_blue().bold(),
                 message.bright_blue().italic()
             );
         }
         "debug" => {
             println!(
-                "{}{} {}",
-                "[control-board]".bright_purple().bold(),
-                "[debug]".yellow(),
+                "{} {} {}",
+                format!("[{}]", time).as_str().magenta(),
+                "[DEBUG]".yellow().bold(),
                 message.yellow().italic()
             );
         }
         "fatal" => {
             println!(
                 "{} {} {}",
-                "[control-board]".bright_red().bold(),
-                "[fatal]".bright_purple().bold(),
+                format!("[{}]", time).as_str().magenta(),
+                "[FATAL]".bright_purple().bold(),
                 message.bright_red().bold()
             );
             process::exit(1);
         }
         "error" => {
             println!(
-                "{}{} {}",
-                "[control-board]".bright_red().bold(),
-                "[error]".bright_red(),
+                "{} {} {}",
+                format!("[{}]", time).as_str().magenta(),
+                "[ERROR]".bright_red().bold(),
                 message.bright_red().italic()
             );
         }
         "warning" => {
             println!(
-                "{}{} {}",
-                "[control-board]".yellow().bold(),
-                "[warn]".yellow(),
+                "{} {} {}",
+                format!("[{}]", time).as_str().magenta(),
+                "[WARN]".yellow().bold(),
                 message.yellow().italic()
             );
         }
         "success" => {
             println!(
-                "{}{} {}",
-                "[control-board]".bright_green().bold(),
-                "[success]".bright_green(),
+                "{} {} {}",
+                format!("[{}]", time).as_str().magenta(),
+                "[SUCCESS]".bright_green().bold(),
                 message.bright_green().italic()
             );
         }
         _ => {
             println!(
                 "{} {}",
-                "[control-board]".normal().bold(),
+                format!("[{}]", time).as_str().magenta(),
                 message.normal().italic()
             );
         }
