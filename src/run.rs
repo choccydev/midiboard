@@ -1,6 +1,7 @@
 use super::types;
 use super::util;
 use anyhow::Error;
+use midir::MidiInputConnection;
 use midir::{Ignore, MidiInput};
 use std::collections::HashMap;
 use std::thread;
@@ -55,44 +56,47 @@ pub fn handle_device(device: String, config: types::Config) -> Result<(), Error>
 
     util::stdout("info", "Opening connection...");
 
-    let _conn_in = midi_in
-        .connect(
-            in_port,
-            &device,
-            move |_stamp, message, _| {
-                let key = message[1];
-                let value = message[2];
+    let conn: &'static MidiInputConnection<()> = util::midiconn_to_smidiconn(
+        midi_in
+            .connect(
+                in_port,
+                &device,
+                move |_stamp, message, _| {
+                    let key = message[1];
+                    let value = message[2];
 
-                match states.get(&key) {
-                    Some(state) => {
-                        util::stdout(
-                            "",
-                            format!("Control {} detected.", &controls.get(&key).unwrap()).as_str(),
-                        );
-                        let key_combo_state =
-                            on_key_event(key, state.clone(), &config, &controls, value);
+                    match states.get(&key) {
+                        Some(state) => {
+                            util::stdout(
+                                "",
+                                format!("Control {} detected.", &controls.get(&key).unwrap())
+                                    .as_str(),
+                            );
+                            let key_combo_state =
+                                on_key_event(key, state.clone(), &config, &controls, value);
 
-                        match key_combo_state.0 {
-                            true => {
-                                match call_command(key.clone()) {
-                                    Ok(command) => util::stdout(
-                                        "info",
-                                        format!("Executed command {}", command).as_str(),
-                                    ),
-                                    Err(error) => util::stdout("error", &error.to_string()),
-                                };
-                                states.remove(&key);
-                                states.insert(key, None);
+                            match key_combo_state.0 {
+                                true => {
+                                    match call_command(key.clone()) {
+                                        Ok(command) => util::stdout(
+                                            "info",
+                                            format!("Executed command {}", command).as_str(),
+                                        ),
+                                        Err(error) => util::stdout("error", &error.to_string()),
+                                    };
+                                    states.remove(&key);
+                                    states.insert(key, None);
+                                }
+                                false => {}
                             }
-                            false => {}
                         }
+                        None => {}
                     }
-                    None => {}
-                }
-            },
-            (),
-        )
-        .expect("Connection error."); // HACK bubble Err
+                },
+                (),
+            )
+            .expect("Connection error."),
+    ); // HACK bubble Err
 
     util::stdout("info", "Connection closed.");
 
