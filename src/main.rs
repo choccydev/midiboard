@@ -1,7 +1,6 @@
 use anyhow::Error;
 use clap::{Arg, Command};
 use colored::*;
-use std::process;
 
 mod config;
 mod run;
@@ -120,9 +119,10 @@ fn main() {
             .arg_required_else_help(false)
         )
         .get_matches();
-    if let Err(error) = run(matches) {
-        println!("Application error: {}", error);
-        process::exit(1);
+    let runtime = run(matches);
+    match runtime {
+        Ok(()) => {}
+        Err(error) => util::stdout("fatal", &error.to_string()),
     }
 }
 
