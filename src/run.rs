@@ -1,7 +1,8 @@
-use super::types;
+use super::types::{
+    Activation, ActivationKind, Command, Config, ControlList, KeyEvent, KeyState, TimeThreshold,
+};
 use super::util;
 use anyhow::Error;
-use midir::MidiInputConnection;
 use midir::{Ignore, MidiInput};
 use std::collections::HashMap;
 use std::thread;
@@ -13,12 +14,23 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
     let config_data = util::read_user_config(path)?;
 
     for config in config_data.config {
-        thread::spawn(move || handle_device(config.device.clone(), config));
+        let builder = thread::Builder::new();
+        let handle = builder.spawn(|| handle_device(config.device.clone(), config))?;
+        match handle.join() {
+            Ok(_) => {}
+            Err(error) => {
+                println!("\n{:?}\n", error);
+                util::stdout(
+                    "fatal",
+                    "There has been a fatal error in a connection thread.",
+                )
+            }
+        };
     }
     Ok(())
 }
 
-pub fn handle_device(device: String, config: types::Config) -> Result<(), Error> {
+pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
@@ -48,7 +60,7 @@ pub fn handle_device(device: String, config: types::Config) -> Result<(), Error>
 
     let controls = get_controls(config.clone());
 
-    let mut states: HashMap<u8, Option<types::KeyState>> = HashMap::new();
+    let mut states: HashMap<u8, Option<KeyState>> = HashMap::new();
 
     for control in controls.clone() {
         states.insert(control.0, None);
@@ -56,27 +68,23 @@ pub fn handle_device(device: String, config: types::Config) -> Result<(), Error>
 
     util::stdout("info", "Opening connection...");
 
-    let conn: &'static MidiInputConnection<()> = util::midiconn_to_smidiconn(
-        midi_in
-            .connect(
-                in_port,
-                &device,
-                move |_stamp, message, _| {
-                    let key = message[1];
-                    let value = message[2];
+    let conn = midi_in.connect(
+        in_port,
+        &device,
+        move |_stamp, message, _| {
+            let key = message[1];
+            let value = message[2];
 
-                    match states.get(&key) {
-                        Some(state) => {
-                            util::stdout(
-                                "",
-                                format!("Control {} detected.", &controls.get(&key).unwrap())
-                                    .as_str(),
-                            );
-                            let key_combo_state =
-                                on_key_event(key, state.clone(), &config, &controls, value);
-
-                            match key_combo_state.0 {
-                                true => {
+            match states.get(&key) {
+                Some(state) => {
+                    util::stdout(
+                        "",
+                        format!("Control {} detected.", &controls.get(&key).unwrap()).as_str(),
+                    );
+                    match on_key_event(key, state.clone(), &config, &controls, value) {
+                        Ok(key_event) => match key_event.initialized {
+                            true => {
+                                if debounce(key_event).valid {
                                     match call_command(key.clone()) {
                                         Ok(command) => util::stdout(
                                             "info",
@@ -84,30 +92,42 @@ pub fn handle_device(device: String, config: types::Config) -> Result<(), Error>
                                         ),
                                         Err(error) => util::stdout("error", &error.to_string()),
                                     };
-                                    states.remove(&key);
-                                    states.insert(key, None);
                                 }
-                                false => {}
+                                states.remove(&key);
+                                states.insert(key, None);
                             }
+                            false => {
+                                states.remove(&key);
+                                states.insert(key, Some(key_event.state));
+                            }
+                        },
+                        Err(error) => {
+                            util::stdout("warn", &error.to_string());
                         }
-                        None => {}
-                    }
-                },
-                (),
-            )
-            .expect("Connection error."),
-    ); // HACK bubble Err
+                    };
+                }
+                None => {}
+            }
+        },
+        (),
+    );
 
-    util::stdout("info", "Connection closed.");
-
-    Ok(())
+    match conn {
+        Ok(_) => loop {},
+        Err(error) => {
+            let error_kind = error.kind();
+            util::stdout("info", "Connection closed.");
+            return Err(Error::msg(error_kind));
+        }
+    }
 }
 
 pub fn call_command(key: u8) -> Result<String, Error> {
-    todo!();
+    //todo!();
+    return Ok(String::from("called!"));
 }
 
-pub fn get_controls(config: types::Config) -> types::ControlList {
+pub fn get_controls(config: Config) -> ControlList {
     let mut list = HashMap::new();
 
     for control in config.controls.clone() {
@@ -118,45 +138,142 @@ pub fn get_controls(config: types::Config) -> types::ControlList {
 
 pub fn on_key_event(
     key: u8,
-    state: Option<types::KeyState>,
-    config: &types::Config,
-    controls: &types::ControlList,
+    state: Option<KeyState>,
+    config: &Config,
+    controls: &ControlList,
     value: u8,
-) -> (bool, Option<types::KeyState>) {
+) -> Result<KeyEvent, Error> {
     match controls.get(&key) {
-        None => return (false, None),
-        Some(somekey) => match state {
-            None => {
-                let new_state = Some(types::KeyState {
-                    control: somekey.clone(),
-                    time_threshold: Duration::from_millis(
-                        get_threshold_from_key(key, config, controls).detection,
-                    ),
-                    activation_threshold: Duration::from_millis(
-                        get_threshold_from_key(key, config, controls).activation,
-                    ),
-                    detections: Vec::new(),
-                    start: Instant::now(),
-                });
-                return (false, new_state);
-            }
-            Some(state) => {
-                // TODO do stuff with the state to detect new values and check if there is a new activation
+        None => {
+            return Err(Error::msg(format!(
+                "key {} not found in control list.",
+                key
+            )));
+        }
+        Some(somekey) => {
+            let threshold_data = get_threshold(key, config, controls)?;
+            let threshold = threshold_data.1;
+            match state {
+                None => {
+                    let mut new_state = KeyState {
+                        control: somekey.clone(),
+                        time_threshold: Duration::from_millis(threshold.detection),
+                        activation_threshold: Duration::from_millis(threshold.activation),
+                        detections: Vec::new(),
+                        start: Instant::now(),
+                    };
+                    new_state.detections.push(value);
 
-                // TODO debounce
+                    return Ok(KeyEvent {
+                        initialized: false,
+                        state: new_state,
+                        kind: threshold_data.0,
+                        elapsed: None,
+                    });
+                }
+                Some(state) => {
+                    let mut new_state = state;
+                    let start = new_state.start;
+                    new_state.detections.push(value);
 
-                // TODO add branches for encoder and for switch
-                todo!()
+                    return Ok(KeyEvent {
+                        initialized: true,
+                        state: new_state,
+                        kind: threshold_data.0,
+                        elapsed: Some(Instant::now().duration_since(start)),
+                    });
+                }
             }
-        },
+        }
     }
 }
 
-pub fn get_threshold_from_key(
+pub fn debounce(mut event: KeyEvent) -> Activation {
+    let activation_threshold = event.state.activation_threshold;
+    let time_threshold = event.state.time_threshold;
+    let elapsed = event.elapsed.unwrap();
+
+    match event.kind {
+        Command::Encoder => {
+            // FIXME the debounce is weird, dunno what's going on, check it
+            return if elapsed.gt(&activation_threshold) {
+                // get last to detections to be able to compare
+                let previous_val: i16 = event
+                    .state
+                    .detections
+                    .remove(event.state.detections.len() - 2)
+                    .into();
+                let last_val: i16 = event
+                    .state
+                    .detections
+                    .remove(event.state.detections.len() - 1)
+                    .into();
+
+                let is_increase = last_val.gt(&previous_val);
+
+                // then reset the detection vec to account for a new detection
+                event.state.detections = Vec::new();
+
+                Activation {
+                    valid: true,
+                    kind: Some(ActivationKind::Encoder {
+                        increase: is_increase,
+                    }),
+                }
+            } else {
+                if elapsed.lt(&time_threshold) {
+                    Activation {
+                        valid: false,
+                        kind: None,
+                    }
+                } else {
+                    let mut accumulator: i16 = 0;
+
+                    for (index, detection) in event.state.detections.iter().enumerate() {
+                        if index % 2 == 0 {
+                            accumulator += Into::<i16>::into(*detection);
+                        } else {
+                            accumulator -= Into::<i16>::into(*detection);
+                        }
+                    }
+
+                    let is_increase = accumulator.lt(&0);
+
+                    Activation {
+                        valid: true,
+                        kind: Some(ActivationKind::Encoder {
+                            increase: is_increase,
+                        }),
+                    }
+                }
+            };
+        }
+        Command::Switch => {
+            todo!()
+        }
+    }
+}
+
+pub fn get_threshold(
     key: u8,
-    config: &types::Config,
-    controls: &types::ControlList,
-) -> types::TimeThreshold {
-    todo!();
-    // TODO cycle and collect config to determine if the key is encoder or switch and return the correct TimeThreshold
+    config: &Config,
+    controls: &ControlList,
+) -> Result<(Command, TimeThreshold), Error> {
+    let commands = &config.controls;
+    let control = controls.get(&key).ok_or(Error::msg(format!(
+        "Key {} not found for any control listed in the configuration.",
+        key
+    )))?;
+    let selection = commands.get(control).ok_or(Error::msg(format!(
+        "Configuration missing for control {}. (how? are you messing with the memory?)",
+        control
+    )))?;
+    match selection.command {
+        Command::Encoder => {
+            return Ok((Command::Encoder, config.thresholds.encoder.clone()));
+        }
+        Command::Switch => {
+            return Ok((Command::Switch, config.thresholds.switch.clone()));
+        }
+    };
 }
