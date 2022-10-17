@@ -48,15 +48,41 @@ pub enum InitialSwitchState {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(tag = "kind")]
 pub enum Command {
-    Encoder {
-        increase: String,
-        decrease: String,
-    },
-    Switch {
-        on: String,
-        off: String,
-        initial_state: InitialSwitchState,
-    },
+    Encoder,
+    Switch,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Encoder {
+    pub increase: String,
+    pub decrease: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Switch {
+    pub on: String,
+    pub off: String,
+    pub initial_state: InitialSwitchState,
+}
+
+#[derive(Debug, Clone)]
+pub struct KeyEvent {
+    pub initialized: bool,
+    pub state: KeyState,
+    pub kind: Command,
+    pub elapsed: Option<Duration>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Activation {
+    pub valid: bool,
+    pub kind: Option<ActivationKind>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ActivationKind {
+    Encoder { increase: bool },
+    Switch { on: bool },
 }
 
 #[derive(Debug, Clone)]
