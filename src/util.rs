@@ -2,7 +2,6 @@ use super::types;
 use chrono;
 use colored::*;
 use config::{Config, ConfigError};
-use core::time;
 use home::home_dir;
 use midir::MidiInputConnection;
 use std::path::PathBuf;
