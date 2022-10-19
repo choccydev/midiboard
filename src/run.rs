@@ -321,11 +321,6 @@ pub fn debounce(event: &mut KeyEvent) -> Activation {
             todo!()
         }
         CommandKind::Trigger => {
-            println!(
-                "elapsed: {:?}, threshold: {:?}",
-                elapsed.as_millis(),
-                &activation_threshold.as_millis()
-            );
             if elapsed.gt(&activation_threshold) {
                 // Reset elapsed time and detections
                 event.state.start = Instant::now();
