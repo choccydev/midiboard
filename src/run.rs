@@ -187,6 +187,9 @@ pub fn call_command(
             Command::Switch(data) => {
                 todo!()
             }
+            Command::Trigger(data) => {
+                todo!()
+            }
         }
     } else {
         Err(Error::msg(
@@ -319,6 +322,9 @@ pub fn debounce(event: &mut KeyEvent) -> Activation {
         CommandKind::Switch => {
             todo!()
         }
+        CommandKind::Trigger => {
+            todo!()
+        }
     }
 }
 
@@ -342,6 +348,9 @@ pub fn get_threshold(
         }
         CommandKind::Switch => {
             return Ok((CommandKind::Switch, config.thresholds.switch.clone()));
+        }
+        CommandKind::Trigger => {
+            return Ok((CommandKind::Trigger, config.thresholds.trigger.clone()));
         }
     };
 }
