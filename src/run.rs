@@ -149,35 +149,14 @@ pub fn call_command(
                     increase: is_increase,
                 } = activation_data
                 {
-                    let command_data: CommandData;
+                    let command_data: &CommandData;
                     if *is_increase {
-                        command_data = data.increase.clone();
+                        command_data = &data.increase;
                     } else {
-                        command_data = data.decrease.clone();
+                        command_data = &data.decrease;
                     }
 
-                    let child = process::Command::new(command_data.cmd.clone())
-                        .args(command_data.args.clone())
-                        .output()?;
-
-                    if child.stdout.len() > 0 {
-                        util::stdout("message", from_utf8(child.stdout.as_slice())?);
-                    }
-
-                    if child.stderr.len() > 0 {
-                        util::stdout("error", from_utf8(child.stderr.as_slice())?);
-                    }
-
-                    let success = child.status.success();
-
-                    if success {
-                        return Ok(format!("{} successfully.", event.state.control));
-                    } else {
-                        return Err(Error::msg(format!(
-                            "{} failed to execute.",
-                            event.state.control
-                        )));
-                    }
+                    spawn_command(&event.state.control, command_data)
                 } else {
                     return Err(Error::msg(
                         "Mismatched command types in activation and config at command call",
@@ -195,6 +174,28 @@ pub fn call_command(
         Err(Error::msg(
             "Mismatched command types between activation and recorded config at command call",
         ))
+    }
+}
+
+pub fn spawn_command(control: &String, data: &CommandData) -> Result<String, Error> {
+    let child = process::Command::new(data.cmd.clone())
+        .args(data.args.clone())
+        .output()?;
+
+    if child.stdout.len() > 0 {
+        util::stdout("message", from_utf8(child.stdout.as_slice())?);
+    }
+
+    if child.stderr.len() > 0 {
+        util::stdout("error", from_utf8(child.stderr.as_slice())?);
+    }
+
+    let success = child.status.success();
+
+    if success {
+        return Ok(format!("{} successfully.", control));
+    } else {
+        return Err(Error::msg(format!("{} failed to execute.", control)));
     }
 }
 
