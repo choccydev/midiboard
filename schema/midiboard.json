@@ -53,7 +53,7 @@
                         "kind": "Trigger",
                         "execute": {
                             "cmd": "playerctl",
-                            "args": ["toggle"]
+                            "args": ["play-pause"]
                         }
                     }
                 }
