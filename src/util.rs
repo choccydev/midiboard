@@ -59,6 +59,14 @@ pub fn stdout(selector: &str, message: &str) {
                 message.yellow().italic()
             );
         }
+        "message" => {
+            println!(
+                "{} {} {}",
+                format!("[{}]", time).as_str().magenta(),
+                "[MESSAGE]".yellow().bold(),
+                message.italic()
+            );
+        }
         "fatal" => {
             println!(
                 "{} {} {}",
