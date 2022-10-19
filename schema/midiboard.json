@@ -14,7 +14,7 @@
                 },
                 "trigger": {
                     "activation": 1000,
-                    "detection": 200
+                    "detection": 0
                 }
             },
             "controls": {
