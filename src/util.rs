@@ -3,7 +3,6 @@ use chrono;
 use colored::*;
 use config::{Config, ConfigError};
 use home::home_dir;
-use midir::MidiInputConnection;
 use std::path::PathBuf;
 use std::process;
 
@@ -38,10 +37,6 @@ pub fn read_user_config(path: Option<&String>) -> Result<types::ConfigFile, Conf
 // From https://stackoverflow.com/a/52367953/16134348
 pub fn string_to_sstr(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
-}
-
-pub fn midiconn_to_smidiconn(conn: MidiInputConnection<()>) -> &'static MidiInputConnection<()> {
-    Box::leak::<'static>(Box::new(conn))
 }
 
 pub fn stdout(selector: &str, message: &str) {
