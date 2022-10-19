@@ -96,9 +96,9 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
                                         ),
                                         Err(error) => util::stdout("error", &error.to_string()),
                                     };
+                                    states.remove(&key);
+                                    states.insert(key, None);
                                 }
-                                states.remove(&key);
-                                states.insert(key, None);
                             }
                             false => {
                                 states.remove(&key);
@@ -264,23 +264,22 @@ pub fn debounce(event: &mut KeyEvent) -> Activation {
     let time_threshold = event.state.time_threshold;
     let elapsed = event.elapsed.unwrap();
 
+    // TODO add proportional reading of increases to actually modify data using percentuals
+
     match event.kind {
         CommandKind::Encoder => {
             return if elapsed.gt(&activation_threshold) {
-                // get last two detections to be able to compare
+                let mut accumulator: i16 = 0;
 
-                let previous_val: i16 = event
-                    .state
-                    .detections
-                    .remove(event.state.detections.len() - 2)
-                    .into();
-                let last_val: i16 = event
-                    .state
-                    .detections
-                    .remove(event.state.detections.len() - 1)
-                    .into();
+                for (index, detection) in event.state.detections.iter().enumerate() {
+                    if index % 2 == 0 {
+                        accumulator += Into::<i16>::into(*detection);
+                    } else {
+                        accumulator -= Into::<i16>::into(*detection);
+                    }
+                }
 
-                let is_increase = last_val.gt(&previous_val);
+                let is_increase = accumulator.lt(&0);
 
                 // then reset the detection vec to account for a new detection next time
                 event.state.detections = Vec::new();
@@ -293,28 +292,20 @@ pub fn debounce(event: &mut KeyEvent) -> Activation {
                 }
             } else {
                 if elapsed.lt(&time_threshold) {
+                    // remove detection from pool
+                    event
+                        .state
+                        .detections
+                        .remove(event.state.detections.len() - 1);
+
                     Activation {
                         valid: false,
                         kind: None,
                     }
                 } else {
-                    let mut accumulator: i16 = 0;
-
-                    for (index, detection) in event.state.detections.iter().enumerate() {
-                        if index % 2 == 0 {
-                            accumulator += Into::<i16>::into(*detection);
-                        } else {
-                            accumulator -= Into::<i16>::into(*detection);
-                        }
-                    }
-
-                    let is_increase = accumulator.lt(&0);
-
                     Activation {
-                        valid: true,
-                        kind: Some(ActivationKind::Encoder {
-                            increase: is_increase,
-                        }),
+                        valid: false,
+                        kind: None,
                     }
                 }
             };
