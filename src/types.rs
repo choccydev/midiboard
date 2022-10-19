@@ -25,6 +25,7 @@ pub struct Config {
 pub struct Thresholds {
     pub encoder: TimeThreshold,
     pub switch: TimeThreshold,
+    pub trigger: TimeThreshold,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -50,6 +51,7 @@ pub enum InitialSwitchState {
 pub enum Command {
     Encoder(Encoder),
     Switch(Switch),
+    Trigger(Trigger),
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -66,6 +68,11 @@ pub struct Switch {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct Trigger {
+    pub execute: CommandData,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct CommandData {
     pub cmd: String,
     pub args: Vec<String>,
@@ -75,6 +82,7 @@ pub struct CommandData {
 pub enum CommandKind {
     Encoder,
     Switch,
+    Trigger,
 }
 
 #[derive(Debug, Clone)]
@@ -95,6 +103,7 @@ pub struct Activation {
 pub enum ActivationKind {
     Encoder { increase: bool },
     Switch { on: bool },
+    Trigger,
 }
 
 impl ActivationKind {
@@ -102,6 +111,7 @@ impl ActivationKind {
         match self {
             Self::Encoder { increase: _ } => CommandKind::Encoder,
             Self::Switch { on: _ } => CommandKind::Switch,
+            Self::Trigger => CommandKind::Trigger,
         }
     }
 }
@@ -111,6 +121,7 @@ impl Command {
         match self {
             Self::Encoder(_) => CommandKind::Encoder,
             Self::Switch(_) => CommandKind::Switch,
+            Self::Trigger(_) => CommandKind::Trigger,
         }
     }
 }
