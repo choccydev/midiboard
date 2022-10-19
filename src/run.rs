@@ -6,6 +6,8 @@ use super::util;
 use anyhow::Error;
 use midir::{Ignore, MidiInput};
 use std::collections::HashMap;
+use std::process;
+use std::str::from_utf8;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -124,9 +126,73 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
     }
 }
 
-pub fn call_command(key: u8) -> Result<String, Error> {
-    //todo!();
-    return Ok(String::from("called!"));
+pub fn call_command(
+    event: &KeyEvent,
+    activation: &Activation,
+    config_data: &ControlConfig,
+) -> Result<String, Error> {
+    let command = &config_data
+        .get(&event.state.control)
+        .ok_or(Error::msg(
+            "Missing config data or wrong control name provided at command call",
+        ))?
+        .command;
+
+    let activation_data = activation.kind.as_ref().ok_or(Error::msg(
+        "Missing activation kind for registered activation at command call",
+    ))?;
+
+    if activation_data.get_kind() == command.get_kind() {
+        match command {
+            Command::Encoder(data) => {
+                if let ActivationKind::Encoder {
+                    increase: is_increase,
+                } = activation_data
+                {
+                    let command_data: CommandData;
+                    if *is_increase {
+                        command_data = data.increase.clone();
+                    } else {
+                        command_data = data.decrease.clone();
+                    }
+
+                    let child = process::Command::new(command_data.cmd.clone())
+                        .args(command_data.args.clone())
+                        .output()?;
+
+                    if child.stdout.len() > 0 {
+                        util::stdout("message", from_utf8(child.stdout.as_slice())?);
+                    }
+
+                    if child.stderr.len() > 0 {
+                        util::stdout("error", from_utf8(child.stderr.as_slice())?);
+                    }
+
+                    let success = child.status.success();
+
+                    if success {
+                        return Ok(format!("{} successfully.", event.state.control));
+                    } else {
+                        return Err(Error::msg(format!(
+                            "{} failed to execute.",
+                            event.state.control
+                        )));
+                    }
+                } else {
+                    return Err(Error::msg(
+                        "Mismatched command types in activation and config at command call",
+                    ));
+                }
+            }
+            Command::Switch(data) => {
+                todo!()
+            }
+        }
+    } else {
+        Err(Error::msg(
+            "Mismatched command types between activation and recorded config at command call",
+        ))
+    }
 }
 
 pub fn get_controls(config: Config) -> ControlList {
