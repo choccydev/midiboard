@@ -51,11 +51,37 @@
                                                     },
                                                     "increase": {
                                                         "description": "Command to be executed by Bash on detection of an increase in the encoder value.",
-                                                        "type": "string"
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "cmd": {
+                                                                "description": "Base command to invoke.",
+                                                                "type": "string"
+                                                            },
+                                                            "args": {
+                                                                "description": "Args provided to the command.",
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
                                                     },
                                                     "decrease": {
                                                         "description": "Command to be executed by Bash on detection of an decrease in the encoder value.",
-                                                        "type": "string"
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "cmd": {
+                                                                "description": "Base command to invoke.",
+                                                                "type": "string"
+                                                            },
+                                                            "args": {
+                                                                "description": "Args provided to the command.",
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
                                                     }
                                                 },
                                                 "additionalProperties": false,
@@ -89,11 +115,37 @@
                                                     },
                                                     "on": {
                                                         "description": "Command to be executed by Bash after triggering an ON event.",
-                                                        "type": "string"
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "cmd": {
+                                                                "description": "Base command to invoke.",
+                                                                "type": "string"
+                                                            },
+                                                            "args": {
+                                                                "description": "Args provided to the command.",
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
                                                     },
                                                     "off": {
                                                         "description": "Command to be executed by Bash after triggering an OFF event.",
-                                                        "type": "string"
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "cmd": {
+                                                                "description": "Base command to invoke.",
+                                                                "type": "string"
+                                                            },
+                                                            "args": {
+                                                                "description": "Args provided to the command.",
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
                                                     },
                                                     "initial_state": {
                                                         "description": "Default state to be assumed at the start of the application.",
