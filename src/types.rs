@@ -17,7 +17,7 @@ pub struct ConfigFile {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub device: String,
-    pub controls: HashMap<String, Input>,
+    pub controls: ControlConfig,
     pub thresholds: Thresholds,
 }
 
@@ -48,28 +48,40 @@ pub enum InitialSwitchState {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(tag = "kind")]
 pub enum Command {
-    Encoder,
-    Switch,
+    Encoder(Encoder),
+    Switch(Switch),
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Encoder {
-    pub increase: String,
-    pub decrease: String,
+    pub increase: CommandData,
+    pub decrease: CommandData,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Switch {
-    pub on: String,
-    pub off: String,
+    pub on: CommandData,
+    pub off: CommandData,
     pub initial_state: InitialSwitchState,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct CommandData {
+    pub cmd: String,
+    pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommandKind {
+    Encoder,
+    Switch,
 }
 
 #[derive(Debug, Clone)]
 pub struct KeyEvent {
     pub initialized: bool,
     pub state: KeyState,
-    pub kind: Command,
+    pub kind: CommandKind,
     pub elapsed: Option<Duration>,
 }
 
@@ -83,6 +95,24 @@ pub struct Activation {
 pub enum ActivationKind {
     Encoder { increase: bool },
     Switch { on: bool },
+}
+
+impl ActivationKind {
+    pub fn get_kind(self: &Self) -> CommandKind {
+        match self {
+            Self::Encoder { increase: _ } => CommandKind::Encoder,
+            Self::Switch { on: _ } => CommandKind::Switch,
+        }
+    }
+}
+
+impl Command {
+    pub fn get_kind(self: &Self) -> CommandKind {
+        match self {
+            Self::Encoder(_) => CommandKind::Encoder,
+            Self::Switch(_) => CommandKind::Switch,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -99,3 +129,4 @@ pub struct KeyState {
 }
 
 pub type ControlList = HashMap<u8, String>; // HashMap<key code, control name>
+pub type ControlConfig = HashMap<String, Input>;
