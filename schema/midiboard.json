@@ -9,8 +9,12 @@
                     "detection": 40
                 },
                 "switch": {
+                    "activation": 400,
+                    "detection": 200
+                },
+                "trigger": {
                     "activation": 1000,
-                    "detection": 1000
+                    "detection": 200
                 }
             },
             "controls": {
@@ -46,16 +50,11 @@
                 "pause": {
                     "key": 0,
                     "command": {
-                        "kind": "Switch",
-                        "on": {
+                        "kind": "Trigger",
+                        "execute": {
                             "cmd": "playerctl",
-                            "args": ["stop"]
-                        },
-                        "off": {
-                            "cmd": "playerctl",
-                            "args": ["play"]
-                        },
-                        "initial_state": "ON"
+                            "args": ["toggle"]
+                        }
                     }
                 }
             }

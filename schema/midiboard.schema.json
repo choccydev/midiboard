@@ -31,7 +31,7 @@
                                 "oneOf": [
                                     {
                                         "type": "object",
-                                        "description": "Entry for control. It can be of either Encoder or Switch type according to the action performed on the device.",
+                                        "description": "Entry for control. It can be of either Encoder, Trigger, or Switch type according to the action performed on the device.",
                                         "properties": {
                                             "key": {
                                                 "description": "Key of the selected MIDI controller to listen for.",
@@ -95,7 +95,7 @@
                                     },
                                     {
                                         "type": "object",
-                                        "description": "Entry for control. It can be of either Encoder or Switch type according to the action performed on the device.",
+                                        "description": "Entry for control. It can be of either Encoder, Trigger, or Switch type according to the action performed on the device.",
                                         "properties": {
                                             "key": {
                                                 "description": "Key of the selected MIDI controller to listen for.",
@@ -162,6 +162,49 @@
                                                 ]
                                             }
                                         }
+                                    },
+                                    {
+                                        "type": "object",
+                                        "description": "Entry for control. It can be of either Encoder, Trigger, or Switch type according to the action performed on the device.",
+                                        "properties": {
+                                            "key": {
+                                                "description": "Key of the selected MIDI controller to listen for.",
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 128,
+                                                "exclusiveMaximum": true
+                                            },
+                                            "command": {
+                                                "type": "object",
+                                                "description": "Commands to execute on a press of the trigger.",
+                                                "properties": {
+                                                    "kind": {
+                                                        "description": "Kind of action to perform. Trigger simply executes the corresponding command immediately.",
+                                                        "type": "string",
+                                                        "const": "Trigger"
+                                                    },
+                                                    "execute": {
+                                                        "description": "Command to be executed by Bash after triggering the event.",
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "cmd": {
+                                                                "description": "Base command to invoke.",
+                                                                "type": "string"
+                                                            },
+                                                            "args": {
+                                                                "description": "Args provided to the command.",
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "additionalProperties": false,
+                                                "required": ["execute", "kind"]
+                                            }
+                                        }
                                     }
                                 ]
                             }
@@ -199,18 +242,40 @@
                                 "description": "Time thresholds for activation and detecion of switch controls.",
                                 "properties": {
                                     "activation": {
-                                        "description": "Activation threshold in milliseconds for a switch control. This is the total time elapsed since the first detection of the key that will be considered for detections without triggering a new command. Switches should usually lie between 400ms and 1000ms.",
+                                        "description": "Activation threshold in milliseconds for a switch control. This is the total time elapsed since the first detection of the key that will be considered for detections without triggering a new command. Switches should usually lie between 200ms and 1000ms.",
                                         "type": "integer",
                                         "minimum": 0,
                                         "maximum": 5000,
-                                        "default": 1000
+                                        "default": 300
                                     },
                                     "detection": {
                                         "description": "Detection threshold in milliseconds for a switch control. This is the minimum time elapsed needed since the last detection of the key, to trigger a new detection. Switch detection time should usually lie between 10 and 70 ms. To completely nullify debouncing and avoid marking detections, you can set it to an equal or higher value than the activation threshold.",
                                         "type": "integer",
                                         "minimum": 0,
-                                        "maximum": 5000,
+                                        "maximum": 500,
+                                        "default": 40
+                                    }
+                                },
+                                "additionalProperties": false,
+                                "required": ["detection", "activation"]
+                            },
+                            "trigger": {
+                                "type": "object",
+                                "description": "Time thresholds for activation and detecion of trigger controls.",
+                                "properties": {
+                                    "activation": {
+                                        "description": "Activation threshold in milliseconds for a trigger control. This is the total time elapsed since the first detection of the key that will be considered for detections without triggering a new command. Triggers should usually lie between 1000ms and 10000ms.",
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 10000,
                                         "default": 1000
+                                    },
+                                    "detection": {
+                                        "description": "Detection threshold in milliseconds for a trigger control. This is the minimum time elapsed needed since the last detection of the key, to trigger a new detection. Trigger detection time should usually lie between 150 and 500 ms. To completely nullify debouncing and avoid marking detections, you can set it to an equal or higher value than the activation threshold.",
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 5000,
+                                        "default": 200
                                     }
                                 },
                                 "additionalProperties": false,
@@ -218,7 +283,7 @@
                             }
                         },
                         "additionalProperties": false,
-                        "required": ["encoder", "switch"]
+                        "required": ["encoder", "switch", "trigger"]
                     }
                 },
                 "additionalProperties": false,
