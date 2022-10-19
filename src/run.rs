@@ -167,7 +167,13 @@ pub fn call_command(
                 todo!()
             }
             Command::Trigger(data) => {
-                todo!()
+                if let ActivationKind::Trigger = activation_data {
+                    spawn_command(&event.state.control, &data.execute)
+                } else {
+                    return Err(Error::msg(
+                        "Mismatched command types in activation and config at command call",
+                    ));
+                }
             }
         }
     } else {
@@ -315,7 +321,27 @@ pub fn debounce(event: &mut KeyEvent) -> Activation {
             todo!()
         }
         CommandKind::Trigger => {
-            todo!()
+            println!(
+                "elapsed: {:?}, threshold: {:?}",
+                elapsed.as_millis(),
+                &activation_threshold.as_millis()
+            );
+            if elapsed.gt(&activation_threshold) {
+                // Reset elapsed time and detections
+                event.state.start = Instant::now();
+                event.state.detections = Vec::new();
+                event.elapsed = Some(Duration::from_millis(0));
+
+                Activation {
+                    valid: true,
+                    kind: Some(ActivationKind::Trigger),
+                }
+            } else {
+                Activation {
+                    valid: false,
+                    kind: None,
+                }
+            }
         }
     }
 }
