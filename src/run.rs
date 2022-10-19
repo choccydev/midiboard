@@ -1,5 +1,6 @@
 use super::types::{
-    Activation, ActivationKind, Command, Config, ControlList, KeyEvent, KeyState, TimeThreshold,
+    Activation, ActivationKind, Command, CommandData, CommandKind, Config, ControlConfig,
+    ControlList, KeyEvent, KeyState, TimeThreshold,
 };
 use super::util;
 use anyhow::Error;
@@ -15,7 +16,7 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
 
     for config in config_data.config {
         let builder = thread::Builder::new();
-        let handle = builder.spawn(|| handle_device(config.device.clone(), config))?;
+        let handle = builder.spawn(move || handle_device(config.device.clone(), config))?;
         match handle.join() {
             Ok(_) => {}
             Err(error) => {
@@ -41,15 +42,15 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
         _ => {
             let mut selected_port = 0;
 
-            for (i, p) in in_ports.iter().enumerate() {
+            for (index, port) in in_ports.iter().enumerate() {
                 if midi_in
-                    .port_name(p)
+                    .port_name(port)
                     .unwrap()
                     .as_str()
                     .to_lowercase()
                     .contains(&device.to_lowercase())
                 {
-                    selected_port = i;
+                    selected_port = index;
                 }
             }
             in_ports
@@ -82,10 +83,11 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
                         format!("Control {} detected.", &controls.get(&key).unwrap()).as_str(),
                     );
                     match on_key_event(key, state.clone(), &config, &controls, value) {
-                        Ok(key_event) => match key_event.initialized {
+                        Ok(mut key_event) => match key_event.initialized {
                             true => {
-                                if debounce(key_event).valid {
-                                    match call_command(key.clone()) {
+                                let activation = debounce(&mut key_event);
+                                if activation.valid {
+                                    match call_command(&key_event, &activation, &config.controls) {
                                         Ok(command) => util::stdout(
                                             "info",
                                             format!("Executed command {}", command).as_str(),
@@ -188,16 +190,16 @@ pub fn on_key_event(
     }
 }
 
-pub fn debounce(mut event: KeyEvent) -> Activation {
+pub fn debounce(event: &mut KeyEvent) -> Activation {
     let activation_threshold = event.state.activation_threshold;
     let time_threshold = event.state.time_threshold;
     let elapsed = event.elapsed.unwrap();
 
     match event.kind {
-        Command::Encoder => {
-            // FIXME the debounce is weird, dunno what's going on, check it
+        CommandKind::Encoder => {
             return if elapsed.gt(&activation_threshold) {
-                // get last to detections to be able to compare
+                // get last two detections to be able to compare
+
                 let previous_val: i16 = event
                     .state
                     .detections
@@ -211,7 +213,7 @@ pub fn debounce(mut event: KeyEvent) -> Activation {
 
                 let is_increase = last_val.gt(&previous_val);
 
-                // then reset the detection vec to account for a new detection
+                // then reset the detection vec to account for a new detection next time
                 event.state.detections = Vec::new();
 
                 Activation {
@@ -248,7 +250,7 @@ pub fn debounce(mut event: KeyEvent) -> Activation {
                 }
             };
         }
-        Command::Switch => {
+        CommandKind::Switch => {
             todo!()
         }
     }
@@ -258,7 +260,7 @@ pub fn get_threshold(
     key: u8,
     config: &Config,
     controls: &ControlList,
-) -> Result<(Command, TimeThreshold), Error> {
+) -> Result<(CommandKind, TimeThreshold), Error> {
     let commands = &config.controls;
     let control = controls.get(&key).ok_or(Error::msg(format!(
         "Key {} not found for any control listed in the configuration.",
@@ -268,12 +270,12 @@ pub fn get_threshold(
         "Configuration missing for control {}. (how? are you messing with the memory?)",
         control
     )))?;
-    match selection.command {
-        Command::Encoder => {
-            return Ok((Command::Encoder, config.thresholds.encoder.clone()));
+    match selection.command.get_kind() {
+        CommandKind::Encoder => {
+            return Ok((CommandKind::Encoder, config.thresholds.encoder.clone()));
         }
-        Command::Switch => {
-            return Ok((Command::Switch, config.thresholds.switch.clone()));
+        CommandKind::Switch => {
+            return Ok((CommandKind::Switch, config.thresholds.switch.clone()));
         }
     };
 }
