@@ -1,6 +1,6 @@
 use super::types::{
     Activation, ActivationKind, Command, CommandData, CommandKind, Config, ControlList,
-    ControlListByKey, KeyEvent, KeyState,
+    ControlListByKey, InitialSwitchState, KeyEvent, KeyState,
 };
 use super::util;
 use anyhow::Error;
@@ -273,15 +273,14 @@ pub fn on_key_event(
                     });
                 }
                 Some(state) => {
-                    let mut new_state = state;
-                    let start = new_state.start;
+                    let mut new_state = state.clone();
                     new_state.detections.push(value);
 
                     return Ok(KeyEvent {
                         initialized: true,
                         state: new_state,
                         kind: threshold_data.0,
-                        elapsed: Some(Instant::now().duration_since(start)),
+                        elapsed: Some(Instant::now().duration_since(state.start)),
                     });
                 }
             }
@@ -323,10 +322,7 @@ pub fn debounce(event: &mut KeyEvent) -> Result<Activation, Error> {
             } else {
                 if elapsed.lt(&time_threshold) {
                     // remove detection from pool
-                    event
-                        .state
-                        .detections
-                        .remove(event.state.detections.len() - 1);
+                    event.state.detections.pop();
 
                     Ok(Activation {
                         valid: false,
