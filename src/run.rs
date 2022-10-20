@@ -86,20 +86,34 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
                     );
                     match on_key_event(key, state.clone(), &config, &controls, value) {
                         Ok(mut key_event) => match key_event.initialized {
-                            true => {
-                                let activation = debounce(&mut key_event);
-                                if activation.valid {
-                                    match call_command(&key_event, &activation, &config.controls) {
-                                        Ok(command) => util::stdout(
-                                            "info",
-                                            format!("Executed command {}", command).as_str(),
-                                        ),
-                                        Err(error) => util::stdout("error", &error.to_string()),
-                                    };
-                                    states.remove(&key);
-                                    states.insert(key, None);
+                            true => match debounce(&mut key_event) {
+                                Ok(activation) => {
+                                    if activation.valid {
+                                        match call_command(
+                                            &key_event,
+                                            &activation,
+                                            &config.controls,
+                                        ) {
+                                            Ok(command) => util::stdout(
+                                                "info",
+                                                format!("Executed command {}", command).as_str(),
+                                            ),
+                                            Err(error) => util::stdout("error", &error.to_string()),
+                                        };
+                                        states.remove(&key);
+                                        match &key_event.kind {
+                                            CommandKind::Switch => {
+                                                // Persist state for switches
+                                                states.insert(key, Some(key_event.state));
+                                            }
+                                            _ => {
+                                                states.insert(key, None);
+                                            }
+                                        }
+                                    }
                                 }
-                            }
+                                Err(error) => util::stdout("error", &error.to_string()),
+                            },
                             false => {
                                 states.remove(&key);
                                 states.insert(key, Some(key_event.state));
@@ -164,7 +178,20 @@ pub fn call_command(
                 }
             }
             Command::Switch(data) => {
-                todo!()
+                if let ActivationKind::Switch { on: is_on } = activation_data {
+                    let command_data: &CommandData;
+                    if *is_on {
+                        command_data = &data.on;
+                    } else {
+                        command_data = &data.off;
+                    }
+
+                    spawn_command(&event.state.control, command_data)
+                } else {
+                    return Err(Error::msg(
+                        "Mismatched command types in activation and config at command call",
+                    ));
+                }
             }
             Command::Trigger(data) => {
                 if let ActivationKind::Trigger = activation_data {
@@ -231,6 +258,10 @@ pub fn on_key_event(
                         activation_threshold: Duration::from_millis(threshold.activation),
                         detections: Vec::new(),
                         start: Instant::now(),
+                        initial_state: match command_data {
+                            Command::Switch(data) => Some(data.initial_state),
+                            _ => None,
+                        },
                     };
                     new_state.detections.push(value);
 
@@ -258,7 +289,7 @@ pub fn on_key_event(
     }
 }
 
-pub fn debounce(event: &mut KeyEvent) -> Activation {
+pub fn debounce(event: &mut KeyEvent) -> Result<Activation, Error> {
     let activation_threshold = event.state.activation_threshold;
     let time_threshold = event.state.time_threshold;
     let elapsed = event.elapsed.unwrap();
@@ -267,7 +298,7 @@ pub fn debounce(event: &mut KeyEvent) -> Activation {
 
     match event.kind {
         CommandKind::Encoder => {
-            return if elapsed.gt(&activation_threshold) {
+            if elapsed.gt(&activation_threshold) {
                 let mut accumulator: i16 = 0;
 
                 for (index, detection) in event.state.detections.iter().enumerate() {
@@ -283,12 +314,12 @@ pub fn debounce(event: &mut KeyEvent) -> Activation {
                 // then reset the detection vec to account for a new detection next time
                 event.state.detections = Vec::new();
 
-                Activation {
+                Ok(Activation {
                     valid: true,
                     kind: Some(ActivationKind::Encoder {
                         increase: is_increase,
                     }),
-                }
+                })
             } else {
                 if elapsed.lt(&time_threshold) {
                     // remove detection from pool
@@ -297,20 +328,84 @@ pub fn debounce(event: &mut KeyEvent) -> Activation {
                         .detections
                         .remove(event.state.detections.len() - 1);
 
-                    Activation {
+                    Ok(Activation {
                         valid: false,
                         kind: None,
-                    }
+                    })
                 } else {
-                    Activation {
+                    Ok(Activation {
                         valid: false,
                         kind: None,
-                    }
+                    })
                 }
-            };
+            }
         }
         CommandKind::Switch => {
-            todo!()
+            if elapsed.gt(&activation_threshold) {
+                // Reset elapsed time
+                event.state.start = Instant::now();
+                event.elapsed = Some(Duration::from_millis(0));
+
+                if event.state.detections.len() == 2 {
+                    // CHECKTHIS we use 255 as OFF and anything else as ON.
+                    // We can do that because the MIDI lib only supports MIDI 1.0, which limits velocities to 7 bits.
+
+                    if let Some(initial_state) = event.state.initial_state {
+                        // This is first activation so we gotta check the initial state in the config
+                        match initial_state {
+                            InitialSwitchState::OFF => {
+                                event.state.detections = vec![255, 255];
+                                Ok(Activation {
+                                    valid: true,
+                                    kind: Some(ActivationKind::Switch { on: false }),
+                                })
+                            }
+                            InitialSwitchState::ON => {
+                                event.state.detections = vec![200, 200]; // 200 is an arbitrary choice, it does not matter.
+                                Ok(Activation {
+                                    valid: true,
+                                    kind: Some(ActivationKind::Switch { on: false }),
+                                })
+                            }
+                        }
+                    } else {
+                        Err(Error::msg(format!(
+                            "Initial state for control {} not found in the config.",
+                            event.state.control
+                        )))
+                    }
+                } else {
+                    let is_currently_on: bool;
+                    event.state.detections.pop(); //remove actual new value
+                                                  // redefine detections to represent states
+                    if event.state.detections.last().unwrap() == &255 {
+                        is_currently_on = false;
+                        event.state.detections.push(200); // set as now on
+                    } else {
+                        is_currently_on = true;
+                        event.state.detections.push(255); // Set as now off
+                    }
+
+                    if event.state.detections.len() > 500 {
+                        // truncates the vec if it's too large, to avoid massive potential leaks (the MIDI lib closure possible is leaking this) on long run times
+                        event.state.detections =
+                            event.state.detections[event.state.detections.len() - 3..].to_vec()
+                    }
+
+                    Ok(Activation {
+                        valid: true,
+                        kind: Some(ActivationKind::Switch {
+                            on: !is_currently_on,
+                        }),
+                    })
+                }
+            } else {
+                event.state.detections.pop();
+                Ok(Activation {
+                    valid: false,
+                    kind: None,
+                })
+            }
         }
         CommandKind::Trigger => {
             if elapsed.gt(&activation_threshold) {
@@ -319,12 +414,12 @@ pub fn debounce(event: &mut KeyEvent) -> Activation {
                 event.state.detections = Vec::new();
                 event.elapsed = Some(Duration::from_millis(0));
 
-                Activation {
+                Ok(Activation {
                     valid: true,
                     kind: Some(ActivationKind::Trigger),
-                }
+                })
             } else {
-                Activation {
+                Ok(Activation {
                     valid: false,
                     kind: None,
                 })

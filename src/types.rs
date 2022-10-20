@@ -138,6 +138,8 @@ pub struct KeyState {
     // value recorded at each detection
     pub detections: Vec<u8>,
     pub start: Instant,
+    pub initial_state: Option<InitialSwitchState>,
+}
 
 pub type ControlListByKey = HashMap<u8, String>; // HashMap<key code, control name>
 pub type ControlList = HashMap<String, Input>;
