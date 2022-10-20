@@ -1,6 +1,6 @@
 use super::types::{
-    Activation, ActivationKind, Command, CommandData, CommandKind, Config, ControlConfig,
-    ControlList, KeyEvent, KeyState, TimeThreshold,
+    Activation, ActivationKind, Command, CommandData, CommandKind, Config, ControlList,
+    ControlListByKey, KeyEvent, KeyState,
 };
 use super::util;
 use anyhow::Error;
@@ -61,7 +61,7 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
         }
     };
 
-    let controls = get_controls(config.clone());
+    let controls = config.get_controls_by_key();
 
     let mut states: HashMap<u8, Option<KeyState>> = HashMap::new();
 
@@ -129,7 +129,7 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
 pub fn call_command(
     event: &KeyEvent,
     activation: &Activation,
-    config_data: &ControlConfig,
+    config_data: &ControlList,
 ) -> Result<String, Error> {
     let command = &config_data
         .get(&event.state.control)
@@ -205,20 +205,11 @@ pub fn spawn_command(control: &String, data: &CommandData) -> Result<String, Err
     }
 }
 
-pub fn get_controls(config: Config) -> ControlList {
-    let mut list = HashMap::new();
-
-    for control in config.controls.clone() {
-        list.insert(control.1.key, control.0);
-    }
-    list
-}
-
 pub fn on_key_event(
     key: u8,
     state: Option<KeyState>,
     config: &Config,
-    controls: &ControlList,
+    controls: &ControlListByKey,
     value: u8,
 ) -> Result<KeyEvent, Error> {
     match controls.get(&key) {
@@ -229,10 +220,11 @@ pub fn on_key_event(
             )));
         }
         Some(somekey) => {
-            let threshold_data = get_threshold(key, config, controls)?;
+            let threshold_data = config.get_threshold(key)?;
             let threshold = threshold_data.1;
             match state {
                 None => {
+                    let command_data = &config.get_control(somekey)?.command;
                     let mut new_state = KeyState {
                         control: somekey.clone(),
                         time_threshold: Duration::from_millis(threshold.detection),
@@ -335,35 +327,8 @@ pub fn debounce(event: &mut KeyEvent) -> Activation {
                 Activation {
                     valid: false,
                     kind: None,
-                }
+                })
             }
         }
     }
-}
-
-pub fn get_threshold(
-    key: u8,
-    config: &Config,
-    controls: &ControlList,
-) -> Result<(CommandKind, TimeThreshold), Error> {
-    let commands = &config.controls;
-    let control = controls.get(&key).ok_or(Error::msg(format!(
-        "Key {} not found for any control listed in the configuration.",
-        key
-    )))?;
-    let selection = commands.get(control).ok_or(Error::msg(format!(
-        "Configuration missing for control {}. (how? are you messing with the memory?)",
-        control
-    )))?;
-    match selection.command.get_kind() {
-        CommandKind::Encoder => {
-            return Ok((CommandKind::Encoder, config.thresholds.encoder.clone()));
-        }
-        CommandKind::Switch => {
-            return Ok((CommandKind::Switch, config.thresholds.switch.clone()));
-        }
-        CommandKind::Trigger => {
-            return Ok((CommandKind::Trigger, config.thresholds.trigger.clone()));
-        }
-    };
 }

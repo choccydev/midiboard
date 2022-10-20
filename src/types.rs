@@ -1,3 +1,4 @@
+use anyhow::Error;
 use rust_embed::RustEmbed;
 use serde::Deserialize;
 use std::{
@@ -17,18 +18,18 @@ pub struct ConfigFile {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub device: String,
-    pub controls: ControlConfig,
+    pub controls: ControlList,
     pub thresholds: Thresholds,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Copy)]
 pub struct Thresholds {
     pub encoder: TimeThreshold,
     pub switch: TimeThreshold,
     pub trigger: TimeThreshold,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Copy)]
 pub struct TimeThreshold {
     pub activation: u64,
     pub detection: u64,
@@ -40,7 +41,7 @@ pub struct Input {
     pub command: Command,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Copy)]
 pub enum InitialSwitchState {
     ON,
     OFF,
@@ -137,7 +138,44 @@ pub struct KeyState {
     // value recorded at each detection
     pub detections: Vec<u8>,
     pub start: Instant,
-}
 
-pub type ControlList = HashMap<u8, String>; // HashMap<key code, control name>
-pub type ControlConfig = HashMap<String, Input>;
+pub type ControlListByKey = HashMap<u8, String>; // HashMap<key code, control name>
+pub type ControlList = HashMap<String, Input>;
+
+impl Config {
+    pub fn get_control(self: &Self, control: &String) -> Result<&Input, Error> {
+        self.controls.get(control).ok_or(Error::msg(format!(
+            "Control {} not found in the loaded config",
+            control
+        )))
+    }
+
+    pub fn get_controls_by_key(self: &Self) -> ControlListByKey {
+        let mut list = HashMap::new();
+
+        for control in self.controls.clone() {
+            list.insert(control.1.key, control.0);
+        }
+        list
+    }
+
+    pub fn get_threshold(self: &Self, key: u8) -> Result<(CommandKind, TimeThreshold), Error> {
+        let by_key = self.get_controls_by_key();
+        let control = by_key.get(&key).ok_or(Error::msg(format!(
+            "Key {} not found for any control listed in the configuration.",
+            key
+        )))?;
+        let selection = self.get_control(control)?;
+        match selection.command.get_kind() {
+            CommandKind::Encoder => {
+                return Ok((CommandKind::Encoder, self.thresholds.encoder));
+            }
+            CommandKind::Switch => {
+                return Ok((CommandKind::Switch, self.thresholds.switch));
+            }
+            CommandKind::Trigger => {
+                return Ok((CommandKind::Trigger, self.thresholds.trigger));
+            }
+        };
+    }
+}
