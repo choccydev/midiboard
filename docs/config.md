@@ -118,3 +118,97 @@ Triggers just execute a single command on a successful activation.
 |-----------|---------------|----------------------------------------------------------------------------------|
 | `kind`    | String (enum) | Event type to understand the control behavior as. Selected as `Trigger`.         |
 | `execute` | Object        | Command definition object for executing on successful activation of the control. |
+
+## The full tree
+
+To make it clearer and to more easily understand the big picture, i added some diagrams that encapsulate the config hierarchy tree:
+
+### Config entry tree
+
+```mermaid
+graph TD
+  root(("{ }"))
+  schema("$Schema") --> A((String))
+  a.config("config") --->|" entries "| config("{ ... } ...")
+  device("device") --> B((String))
+  thresholds(["thresholds"])
+  controls(["controls"])
+
+
+
+  root --> schema
+  root --> a.config
+
+  config --> device
+  config --> thresholds
+  config --> controls
+
+```
+
+### Thresholds tree
+
+```mermaid
+graph TD
+  thresholds(["thresholds"])
+  thresh.encoder("encoder  ")
+  thresh.switch("switch  ")
+  thresh.trigger("trigger  ")
+  
+  thresh.sub[["THRESHOLD"]]
+  thresh.sub.det("detection") --> A((Number))
+  thresh.sub.act("activation") --> B((Number))
+  thresh.sub --> thresh.sub.det
+  thresh.sub --> thresh.sub.act
+
+  thresholds --> thresh.encoder
+  thresholds --> thresh.switch
+  thresholds --> thresh.trigger
+
+  thresh.encoder --> thresh.encoder.1[["THRESHOLD"]]
+  thresh.switch --> thresh.switch.1[["THRESHOLD"]]
+  thresh.trigger --> thresh.trigger.1[["THRESHOLD"]]
+
+```
+
+### Controls tree
+
+```mermaid
+graph TD
+  controls(["controls"])
+  controls.name("{ ... }")
+  controls.key("key") --> A((String))
+  command("command  ")
+
+  controls --->|properties| controls.name
+  controls.name --> command
+  controls.name --> controls.key
+
+  command --> choose{" "}
+  choose1("{ ... }")
+  choose2("{ ... }")
+  choose3("{ ... }")
+  choose ----->|Encoder| choose1
+  choose -------->|Switch| choose2
+  choose -->|Trigger| choose3
+
+  choose1 --> kind1("kind") --> B1(("String: 'Encoder'"))
+  choose1 --> enc1("increase") --> B2[["COMMAND"]]
+  choose1 --> enc2("decrease") --> B3[["COMMAND"]]
+
+  choose2 --> kind2("kind") --> C1(("String: 'Switch'"))
+  choose2 --> sw1("on") --> C2[["COMMAND"]]
+  choose2 --> sw2("off") --> C3[["COMMAND"]]
+  choose2 --> sw3("initial_state") --> C4((String))
+
+  choose3 --> kind3("kind") --> D1(("String: 'Trigger'"))
+  choose3 --> tr1("execute") --> D2[["COMMAND"]]
+
+
+  COMMAND[[COMMAND]] --> cmd1("cmd") --> cmd11((String))
+  COMMAND --> cmd2("args") --> cmd21(("Array(String)"))
+
+
+
+
+
+```
