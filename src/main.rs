@@ -3,8 +3,8 @@ use clap::{Arg, Command};
 use colored::*;
 
 mod config;
+mod devices;
 mod run;
-mod test;
 mod types;
 mod util;
 
@@ -18,9 +18,9 @@ fn main() {
         .subcommand_required(true)
         .arg_required_else_help(true)
         .subcommand(
-            Command::new("test")
+            Command::new("devices")
                 .alias("active")
-            .about("Detects and tests currently active MIDI devices.")
+            .about("Detects and devicess currently active MIDI devices.")
             .long_about(util::string_to_sstr(
                 format!("{}\n {}",
                     "This command lets you know what devices you have active, their names, and check if they're working correctly. ".yellow(),
@@ -32,8 +32,8 @@ fn main() {
             .arg_required_else_help(true)
             .arg(
                 Arg::new("list")
-                .alias("devices")
-                .short('d')
+                .alias("print")
+                .short('l')
                 .long("list")
                 .takes_value(false)
                 .help("Lists active MIDI devices and outputs them to stdout.")
@@ -41,9 +41,9 @@ fn main() {
             )
             .arg(
                 Arg::new("listen")
-                .alias("inputs")
-                .short('l')
-                .long("listen")
+                .alias("input")
+                .short('i')
+                .long("input")
                 .multiple_values(false)
                 .value_name("DEVICE")
                 .takes_value(true)
@@ -57,7 +57,7 @@ fn main() {
             .about("Manages the configuration file.")
             .long_about(util::string_to_sstr(
                 format!("{}\n {} {} {}", 
-                    "This command allows you to generate a skeleton for the config file, or test validity of an existing one.".yellow(), 
+                    "This command allows you to generate a skeleton for the config file, or devices validity of an existing one.".yellow(), 
                     "By default the configuration file will be generated and read from ", 
                     "$HOME".bright_purple(),
                     concat!(", but you can select an alternative path if desired.")
@@ -66,7 +66,7 @@ fn main() {
             .arg_required_else_help(true)
             .arg(
                 Arg::new("validate")
-                .alias("test")
+                .alias("devices")
                 .short('v')
                 .long("validate")
                 .takes_value(false)
@@ -128,7 +128,7 @@ fn main() {
 
 fn run(cli: clap::ArgMatches) -> Result<(), Error> {
     return match cli.subcommand() {
-        Some(("test", sub_m)) => test::run(sub_m),
+        Some(("devices", sub_m)) => devices::run(sub_m),
         Some(("run", sub_m)) => run::run(sub_m),
         Some(("config", sub_m)) => config::run(sub_m),
         _ => Ok(()),
