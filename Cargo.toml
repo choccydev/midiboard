@@ -1,9 +1,13 @@
 [package]
 name = "midiboard"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+description = "CLI tool to trigger arbitrary commands using any MIDI 1.0 compatible device."
+homepage = "https://github.com/aordano/midiboard"
+repository = "https://github.com/aordano/midiboard"
+documentantion = "https://aordano.github.io/midiboard/"
+readme = "README.md"
 
 [dependencies]
 midir = "0.8.0"
