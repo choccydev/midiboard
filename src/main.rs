@@ -10,7 +10,7 @@ mod util;
 
 fn main() {
     let matches = Command::new("midiboard")
-        .version("0.3.0")
+        .version("0.3.1")
         .author(util::string_to_sstr(format!("{}", "Agata Ordano - aordano@protonmail.com".bright_cyan())))
         .about("Utility that allows using an arbitrary MIDI controller as a control board.")
         .long_about(concat! ("This utility helps with the execution of frequent or specific tasks to be done using a MIDI controller to execute user-provided commands.\n", 
@@ -20,7 +20,7 @@ fn main() {
         .subcommand(
             Command::new("devices")
                 .alias("active")
-            .about("Detects and devicess currently active MIDI devices.")
+            .about("Detects or listens to currently active MIDI devices.")
             .long_about(util::string_to_sstr(
                 format!("{}\n {}",
                     "This command lets you know what devices you have active, their names, and check if they're working correctly. ".yellow(),
