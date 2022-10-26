@@ -138,7 +138,7 @@ Once you are armed with the name, you need to add it to the configuration, in th
 
 The `thresholds` key inside the config data defines what are the time thresholds to consider when [debouncing](http://www.interfacebus.com/Glossary_Switch_Debounce.html) the input. MIDI is a digital protocol, so debouncing input shouldn't be necesary, but encoders, and "sensitive" keys or pads update their [velocity](https://electronicmusic.fandom.com/wiki/Velocity) very fast (for human timescales), which makes it a requirement.
 
-For most uses, the default thresholds present on the skeleton are fine. You can tune them according to your needs or the quirks of your device. For more information check the [event docs](https://github,com/aordano/midiboard/tree/master/docs/events.md).
+For most uses, the default thresholds present on the skeleton are fine. You can tune them according to your needs or the quirks of your device. For more information check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
 ### Defining controls
 
@@ -264,7 +264,7 @@ To solve this issue, each control has a `kind` field, that defines the kind of e
 
 The rest of the valid fields on the command _depend on the event type defined on the `kind` field_.
 
-For more information check the [event docs](https://github,com/aordano/midiboard/tree/master/docs/events.md).
+For more information check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
 #### Anatomy of a command definition
 
@@ -310,7 +310,7 @@ This command keeps activating itself if it keeps detecting further increases or 
 > },
 > ```
 
-For more information check the [event docs](https://github,com/aordano/midiboard/tree/master/docs/events.md).
+For more information check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
 #### Switch commmands
 
@@ -340,7 +340,7 @@ This command will only switch from "ON" state to "OFF" state and viceversa, not 
 > },
 > ```
 
-For more information check the [event docs](https://github,com/aordano/midiboard/tree/master/docs/events.md).
+For more information check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
 #### Trigger commands
 
@@ -363,7 +363,7 @@ For more information check the [event docs](https://github,com/aordano/midiboard
 > },
 > ```
 
-For more information check the [event docs](https://github,com/aordano/midiboard/tree/master/docs/events.md).
+For more information check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
 ### Validation
 
@@ -453,11 +453,11 @@ By default it will expect a config file at `$HOME/midiboard.json`.Optionally add
 
 ## The config file
 
-For more information on the config file check the [config docs](https://github,com/aordano/midiboard/tree/master/docs/config.md).
+For more information on the config file check the [config docs](https://github.com/aordano/midiboard/tree/master/docs/config.md).
 
 ## Events
 
-For more information on events check the [event docs](https://github,com/aordano/midiboard/tree/master/docs/events.md).
+For more information on events check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
 ## CLI
 
