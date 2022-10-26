@@ -101,7 +101,7 @@ This entry has three sets of possible children. What children does it have depen
 | `kind`       | String (enum) | Event type to understand the control behavior as. Options are  ` Encoder ` ,  ` Switch ` , and  ` Trigger ` . |
 |  valid keys | Object        | Valid key depends on selected `kind` of event.                                                                |
 
-For more information on the event types check the [events docs](https://github.com/aordano/midiboard/docs/events.md).
+For more information on the event types check the [events docs](https://github.com/aordano/midiboard/blob/master/docs/events.md#Eventtypes).
 
 ### 4.1. <a name='Commanddefinitionobject'></a>Command definition object
 
