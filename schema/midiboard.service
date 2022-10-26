@@ -2,9 +2,16 @@
 Description=Midiboard Daemon
 Documentation=https://github.com/aordano/midiboard/docs
 After=sound.target 
+StartLimitInterval=200
+StartLimitBurst=5
 
 [Service]
+Type=exec
+User=@USER@
 ExecStart=/bin/midiboard run
+ExitType=main
+Restart=on-failure
+
 
 [Install]
 WantedBy=multi-user.target

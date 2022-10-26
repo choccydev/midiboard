@@ -469,9 +469,10 @@ By default it will expect a config file at `$HOME/midiboard.json`.Optionally add
    wget -O midiboard.service https://raw.githubusercontent.com/aordano/midiboard/master/schema/midiboard.service
    ```
 
-2. Move the service file
+2. Patch and move the service file
 
    ```bash
+   sed -i "s/@USER@/$(whoami)/g" midiboard.service
    sudo mv midiboard.service /etc/systemd/system/midiboard.service
    ```
 
