@@ -207,8 +207,8 @@ graph TD
   COMMAND[[COMMAND]] --> cmd1("cmd") --> cmd11((String))
   COMMAND --> cmd2("args") --> cmd21(("Array(String)"))
 
-
-
-
-
 ```
+
+## Even more detail
+
+For more details you should directly check the [schema and its annotations](https://github.com/aordano/midiboard/blob/master/schema/midiboard.schema.json). It is recommended to use a `JSON` visualization tool to make more sense of it.
