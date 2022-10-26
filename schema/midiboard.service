@@ -1,0 +1,10 @@
+[Unit]
+Description=Midiboard Daemon
+Documentation=https://github.com/aordano/midiboard/docs
+After=sound.target 
+
+[Service]
+ExecStart=/bin/midiboard run
+
+[Install]
+WantedBy=multi-user.target
