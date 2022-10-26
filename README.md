@@ -1,27 +1,46 @@
-
 # MidiBoard
 
 CLI tool to trigger arbitrary commands using any MIDI 1.0 compatible  device.
 
-## What is this?
+<!-- vscode-markdown-toc -->
+* 1. [What is this?](#Whatisthis)
+* 2. [Getting Started](#GettingStarted)
+* 3. [Install](#Install)
+  * 3.1. [Cargo](#Cargo)
+  * 3.2. [Manual](#Manual)
+* 4. [Configuration](#Configuration)
+  * 4.1. [Create a skeleton](#Createaskeleton)
+  * 4.2. [Define your device](#Defineyourdevice)
+  * 4.3. [Define each command](#Defineeachcommand)
+* 5. [Running](#Running)
+  * 5.1. [Manually](#Manually)
+  * 5.2. [Daemonized](#Daemonized)
+
+<!-- vscode-markdown-toc-config
+	numbering=true
+	autoSave=true
+	/vscode-markdown-toc-config -->
+<!-- /vscode-markdown-toc -->
+
+## 1. <a name='Whatisthis'></a>What is this?
 
 This tool lets the user associate any executable commands to actions in one or more MIDI devices, like changing volume, altering backlight level, changing a song, starting/stopping a service, or launching any script/executable, on the press of a button or turn of a knob.
 
-## Getting Started
+## 2. <a name='GettingStarted'></a>Getting Started
 
 To use this software you need to install it, define a configuration, and then either run at-will or daemonize the process. The most cumbersome part, of course is writing the configuration file.
 
 For details check [the docs](https://github.com/aordano/midiboard/tree/master/docs).
 
-## Install
+## 3. <a name='Install'></a>Install
 
-### Cargo
+### 3.1. <a name='Cargo'></a>Cargo
 
    ```bash
    cargo install midiboard
    ```
 
-### Manual
+### 3.2. <a name='Manual'></a>Manual
 
 1. Clone
 
@@ -42,13 +61,13 @@ For details check [the docs](https://github.com/aordano/midiboard/tree/master/do
    sudo cp ./target/release/midiboard /usr/bin/midiboard
    ```
 
-## Configuration
+## 4. <a name='Configuration'></a>Configuration
 
 For details on the configuration file check the [config docs page](https://github.com/aordano/midiboard/blob/master/docs/config.md).
 
 For help using the CLI, there is integrated help via the `--help` flag.
 
-### Create a skeleton
+### 4.1. <a name='Createaskeleton'></a>Create a skeleton
 
  This will create it at `$HOME/midiboard.json`. Optionally add a `--path` flag to change the output location:
 
@@ -56,7 +75,7 @@ For help using the CLI, there is integrated help via the `--help` flag.
    midiboard config --generate
    ```
 
-### Define your device
+### 4.2. <a name='Defineyourdevice'></a>Define your device
 
 Get the name of your device and put it in the `device` field in the config:
 
@@ -64,7 +83,7 @@ Get the name of your device and put it in the `device` field in the config:
    midiboard devices --list
    ```
 
-### Define each command
+### 4.3. <a name='Defineeachcommand'></a>Define each command
 
 Listen to the input to know what Is the numerical key value of your chosen knob/button/key:
 
@@ -74,9 +93,9 @@ Listen to the input to know what Is the numerical key value of your chosen knob/
 
    With that value you can fill the corresponding entry on the config file.
 
-## Running
+## 5. <a name='Running'></a>Running
 
-### Manually
+### 5.1. <a name='Manually'></a>Manually
 
 By default it will expect a config file at `$HOME/midiboard.json`.Optionally add a `--path` flag to change the output location:
 
@@ -84,7 +103,7 @@ By default it will expect a config file at `$HOME/midiboard.json`.Optionally add
    midiboard run
    ```
 
-### Daemonized
+### 5.2. <a name='Daemonized'></a>Daemonized
 
 1. Get the service file
 

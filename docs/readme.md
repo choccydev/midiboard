@@ -2,17 +2,49 @@
 
 This tool lets the user associate any executable commands to actions in one or more MIDI devices, like changing volume, altering backlight level, changing a song, starting/stopping a service, or launching any script/executable, on the press of a button or turn of a knob.
 
-## Installation
+TOC:
+
+<!-- vscode-markdown-toc -->
+* 1. [Installation](#Installation)
+  * 1.1. [Cargo](#Cargo)
+  * 1.2. [Manual](#Manual)
+* 2. [Concept](#Concept)
+* 3. [Usage](#Usage)
+* 4. [Configuration](#Configuration)
+  * 4.1. [Getting the device](#Gettingthedevice)
+  * 4.2. [Managing thresholds](#Managingthresholds)
+  * 4.3. [Defining controls](#Definingcontrols)
+    * 4.3.1. [Naming](#Naming)
+    * 4.3.2. [Getting the key value](#Gettingthekeyvalue)
+  * 4.4. [Writing the commands](#Writingthecommands)
+    * 4.4.1. [Anatomy of a command definition](#Anatomyofacommanddefinition)
+    * 4.4.2. [Encoder commands](#Encodercommands)
+    * 4.4.3. [Switch commmands](#Switchcommmands)
+    * 4.4.4. [Trigger commands](#Triggercommands)
+  * 4.5. [Validation](#Validation)
+* 5. [Running](#Running)
+  * 5.1. [Manually](#Manually)
+  * 5.2. [Daemonized](#Daemonized)
+* 6. [The config file](#Theconfigfile)
+* 7. [Events](#Events)
+* 8. [CLI](#CLI)
+
+<!-- vscode-markdown-toc-config
+	numbering=true
+	autoSave=true
+	/vscode-markdown-toc-config -->
+<!-- /vscode-markdown-toc -->
+## 1. <a name='Installation'></a>Installation
 
 It is recommended you install via Cargo.
 
-### Cargo
+### 1.1. <a name='Cargo'></a>Cargo
 
    ```bash
    cargo install midiboard
    ```
 
-### Manual
+### 1.2. <a name='Manual'></a>Manual
 
 1. Clone
 
@@ -31,8 +63,9 @@ It is recommended you install via Cargo.
 
    ```bash
    sudo cp ./target/release/midiboard /usr/bin/midiboard
+   ```
 
-## Concept
+## 2. <a name='Concept'></a>Concept
 
 The concept is to have an arbitrary configuration that serves as a source of truth to define a data model that can be executed upon activation of the determined input:
 
@@ -52,13 +85,13 @@ graph LR
   runtime -->|triggers| command
 ```
 
-## Usage
+## 3. <a name='Usage'></a>Usage
 
 Before using this tool it requires to be configured, then it can be run via CLI either manually or as a daemon.
 
 For more information on the CLI options check out the [CLI docs](https://github.com/aordano/midiboard/tree/master/docs/cli.md).
 
-## Configuration
+## 4. <a name='Configuration'></a>Configuration
 
 First, it is heavily recommended to generate a skeleton config file.  The configuration is complex and this skeleton includes the correct `JSON` schema, which provides some basic linting, integrated documentation, and type/bounds checking. Of course this is useless Without an editor that can interpret the schema.
 
@@ -72,7 +105,7 @@ By default, the configuration is generated at `$HOME/midiboard.json`. You can ch
 midiboard config --generate --path <FULL PATH>
 ```
 
-### Getting the device
+### 4.1. <a name='Gettingthedevice'></a>Getting the device
 
 Once you have a config skeleton, you first need to populate the device to use. To do this first you need to get the display name advertised to ALSA by the MIDI device of your choice.
 
@@ -134,24 +167,24 @@ Once you are armed with the name, you need to add it to the configuration, in th
 >     ]
 > ```
 
-### Managing thresholds
+### 4.2. <a name='Managingthresholds'></a>Managing thresholds
 
 The `thresholds` key inside the config data defines what are the time thresholds to consider when [debouncing](http://www.interfacebus.com/Glossary_Switch_Debounce.html) the input. MIDI is a digital protocol, so debouncing input shouldn't be necesary, but encoders, and "sensitive" keys or pads update their [velocity](https://electronicmusic.fandom.com/wiki/Velocity) very fast (for human timescales), which makes it a requirement.
 
 For most uses, the default thresholds present on the skeleton are fine. You can tune them according to your needs or the quirks of your device. For more information check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
-### Defining controls
+### 4.3. <a name='Definingcontrols'></a>Defining controls
 
-#### Naming
+#### 4.3.1. <a name='Naming'></a>Naming
 
 Controls are defined as user-defined keys under the `controls` field.
 
 User defined names need to adhere to this rules:
 
-- Only letters (a-z), both lowercase and uppercase, digits (0-9), and lodash are accepted as valid.
-- Must start with a lowercase letter
-- Must be a single word
-- Be unique
+* Only letters (a-z), both lowercase and uppercase, digits (0-9), and lodash are accepted as valid.
+* Must start with a lowercase letter
+* Must be a single word
+* Be unique
 
 > valid examples:
 >
@@ -174,7 +207,7 @@ User defined names need to adhere to this rules:
 
 Make sure each control is descriptive, as its name is used in error messages and logs.
 
-#### Getting the key value
+#### 4.3.2. <a name='Gettingthekeyvalue'></a>Getting the key value
 
 Each control has two fields, `key` and  `command`. `key` is a numeric value that represents the input you want associated with the control. `command` is an object containing the thing to trigger once the control is activated successfully.
 
@@ -236,7 +269,7 @@ Once you have the value, you need to add it (as number) on the config:
 >        }
 > ```
 
-### Writing the commands
+### 4.4. <a name='Writingthecommands'></a>Writing the commands
 
 For each control you define you can have one or more commands to execute on successful activation. How you define a command depends on the kind of event triggered. Different kinds of events map to different kind of actions in the real world, which implies a need to do different things on each one.
 
@@ -266,7 +299,7 @@ The rest of the valid fields on the command _depend on the event type defined on
 
 For more information check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
-#### Anatomy of a command definition
+#### 4.4.1. <a name='Anatomyofacommanddefinition'></a>Anatomy of a command definition
 
 Regardless of the kind of event associated with a command, the data you need to add to the configuration to define what a command will execute on activation will always be the same. This is an object with two fields, `cmd`, and `args`. `cmd` defines the main command (found in `$PATH`) or script path to execute. `args` is an array of strings defining possible arguments for the command.
 
@@ -283,7 +316,7 @@ Regardless of the kind of event associated with a command, the data you need to 
 
 The given command will be executed on a newly spawned shell.
 
-#### Encoder commands
+#### 4.4.2. <a name='Encodercommands'></a>Encoder commands
 
 `Encoder` commands are designed to map in a more-or-less natural way to knobs found on most common MIDI controllers. The defining characteristic of this kind of commands is that they have a command to execute when the velocity decreases (i.e. turning knob to the left or sliding down a fader), and a different command when it increases (i.e. turning a knob to the right or sliding up a fader).
 
@@ -312,7 +345,7 @@ This command keeps activating itself if it keeps detecting further increases or 
 
 For more information check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
-#### Switch commmands
+#### 4.4.3. <a name='Switchcommmands'></a>Switch commmands
 
 `Switch` commands are designed to map in a more-or-less natural way to pads, keys and buttons found on most common MIDI controllers. The defining characteristic of this kind of commands is that they keep state to be able to reliably switch between "ON" and "OFF" states.
 
@@ -342,7 +375,7 @@ This command will only switch from "ON" state to "OFF" state and viceversa, not 
 
 For more information check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
-#### Trigger commands
+#### 4.4.4. <a name='Triggercommands'></a>Trigger commands
 
 `Trigger` commands are designed to map in a more-or-less natural way to pads, keys and buttons found on most common MIDI controllers. The defining characteristic of this kind of commands is that they have a single command to execute, repeated on each successful activation.
 
@@ -365,7 +398,7 @@ For more information check the [event docs](https://github.com/aordano/midiboard
 
 For more information check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
-### Validation
+### 4.5. <a name='Validation'></a>Validation
 
 With all that covered, you can fully complete your config file. To avoid the need to run this program and check if you crash or not, a utility exposes the parser and lets you validate the file:
 
@@ -418,9 +451,9 @@ midiboard config --validate --path <FULL PATH>
 > [2022-10-26T12:51:19-03:00] [FATAL] missing field `increase`
 > ```
 
-## Running
+## 5. <a name='Running'></a>Running
 
-### Manually
+### 5.1. <a name='Manually'></a>Manually
 
 By default it will expect a config file at `$HOME/midiboard.json`.Optionally add a `--path` flag to change the output location:
 
@@ -428,7 +461,7 @@ By default it will expect a config file at `$HOME/midiboard.json`.Optionally add
    midiboard run
    ```
 
-### Daemonized
+### 5.2. <a name='Daemonized'></a>Daemonized
 
 1. Get the service file
 
@@ -451,14 +484,14 @@ By default it will expect a config file at `$HOME/midiboard.json`.Optionally add
    sudo systemctl enable --now midiboard
    ```
 
-## The config file
+## 6. <a name='Theconfigfile'></a>The config file
 
 For more information on the config file check the [config docs](https://github.com/aordano/midiboard/tree/master/docs/config.md).
 
-## Events
+## 7. <a name='Events'></a>Events
 
 For more information on events check the [event docs](https://github.com/aordano/midiboard/tree/master/docs/events.md).
 
-## CLI
+## 8. <a name='CLI'></a>CLI
 
 For more information on the CLI options check out the [CLI docs](https://github.com/aordano/midiboard/tree/master/docs/cli.md).
