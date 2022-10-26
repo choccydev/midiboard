@@ -1,5 +1,5 @@
 {
-    "$schema": "./midiboard.schema.json",
+    "$schema": "https://raw.githubusercontent.com/aordano/control-board/master/schema/midiboard.schema.json",
     "config": [
         {
             "device": "Your Device Here",
@@ -34,7 +34,6 @@
                 },
                 "song": {
                     "key": 0,
-                    "kind": "Encoder",
                     "command": {
                         "kind": "Encoder",
                         "decrease": {
