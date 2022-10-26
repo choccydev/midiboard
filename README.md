@@ -32,6 +32,7 @@ For details check [the docs](https://github.com/aordano/midiboard/tree/master/do
 2. Build
 
    ```bash
+   cd midiboard
    cargo build --release
    ```
 
