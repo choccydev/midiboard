@@ -34,9 +34,13 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
 }
 
 pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
+    //FIXME:Patch check what's the deal with alsa_seq() leaking memory
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
+    //TODO:Minor Add error handling in case of dropped connection or device error (maybe with a heartbeat? The midir lib sucks)
+
+    // TODO:Patch Refactor this get-port thingy into its own function
     // Get an input port (read from config file)
     let in_ports = midi_in.ports();
     let in_port = match in_ports.len() {
@@ -71,6 +75,7 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
 
     util::stdout("info", "Opening connection...");
 
+    // TODO:Patch Refactor this connection thingy into its own function
     let conn = midi_in.connect(
         in_port,
         &device,
@@ -293,13 +298,18 @@ pub fn debounce(event: &mut KeyEvent) -> Result<Activation, Error> {
     let time_threshold = event.state.time_threshold;
     let elapsed = event.elapsed.unwrap();
 
-    // TODO add proportional reading of increases to actually modify data using percentuals
+    // TODO:Minor Add proportional reading of increases to actually modify data using percentuals
+    // TODO:Minor Add easing to the controls reaction
+    // TODO:Minor Register detections and use the composite delta/derivative to gauge activations
+    // TODO:Major Add a way to tell the Midi Out that on reaching max value on Encoders, it should set the velocity as 0, that way it can wrap around
 
     match event.kind {
         CommandKind::Encoder => {
             if elapsed.gt(&activation_threshold) {
+                // TODO:Patch Refactor this accumulator function stuff into its own function
                 let mut accumulator: i16 = 0;
 
+                // FIXME:Patch This encoder accumulator function is kinda weird, sums weirdly at high values
                 for (index, detection) in event.state.detections.iter().enumerate() {
                     if index % 2 == 0 {
                         accumulator += Into::<i16>::into(*detection);
@@ -343,7 +353,7 @@ pub fn debounce(event: &mut KeyEvent) -> Result<Activation, Error> {
                 event.elapsed = Some(Duration::from_millis(0));
 
                 if event.state.detections.len() == 2 {
-                    // CHECKTHIS we use 255 as OFF and anything else as ON.
+                    // HACK:Minor we use 255 as OFF and anything else as ON.
                     // We can do that because the MIDI lib only supports MIDI 1.0, which limits velocities to 7 bits.
 
                     if let Some(initial_state) = event.state.initial_state {
@@ -382,7 +392,7 @@ pub fn debounce(event: &mut KeyEvent) -> Result<Activation, Error> {
                         event.state.detections.push(255); // Set as now off
                     }
 
-                    if event.state.detections.len() > 500 {
+                    // ? truncates the vec if it's too large, to avoid massive potential leaks (the MIDI lib closure possible is leaking this) on long run times
                         // truncates the vec if it's too large, to avoid massive potential leaks (the MIDI lib closure possible is leaking this) on long run times
                         event.state.detections =
                             event.state.detections[event.state.detections.len() - 3..].to_vec()

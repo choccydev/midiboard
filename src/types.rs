@@ -28,7 +28,7 @@ pub struct Thresholds {
     pub switch: TimeThreshold,
     pub trigger: TimeThreshold,
 }
-
+// TODO:Minor Make `detection` threshold an Option<> or create a new struct for detection-less controls
 #[derive(Debug, Deserialize, Clone, Copy)]
 pub struct TimeThreshold {
     pub activation: u64,
@@ -73,7 +73,7 @@ pub struct Trigger {
     pub execute: CommandData,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+// TODO:Minor Add threshold override per-control
 pub struct CommandData {
     pub cmd: String,
     pub args: Vec<String>,

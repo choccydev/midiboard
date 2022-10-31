@@ -41,7 +41,9 @@ pub fn string_to_sstr(s: String) -> &'static str {
 
 pub fn stdout(selector: &str, message: &str) {
     let time = chrono::offset::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-    // TODO implement IO error handling
+    // TODO:Minor implement debug level in the config
+    // TODO:Patch implement StdIO error handling
+    // TODO:Major implement "[FROM: {}]" to refer to spawned children messages. D this by adding an Option<> as last requirement with the cmd value
     match selector {
         "info" => {
             println!(
