@@ -4,7 +4,6 @@ use colored::*;
 use config::{Config, ConfigError};
 use home::home_dir;
 use std::path::PathBuf;
-use std::process;
 
 pub fn read_user_config(path: Option<&String>) -> Result<types::ConfigFile, ConfigError> {
     let mut fullpath = PathBuf::new();
@@ -76,7 +75,7 @@ pub fn stdout(selector: &str, message: &str) {
                 "[FATAL]".bright_purple().bold(),
                 message.bright_red().bold()
             );
-            process::exit(1);
+            assert!(false);
         }
         "error" => {
             println!(
