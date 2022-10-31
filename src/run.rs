@@ -393,7 +393,7 @@ pub fn debounce(event: &mut KeyEvent) -> Result<Activation, Error> {
                     }
 
                     // ? truncates the vec if it's too large, to avoid massive potential leaks (the MIDI lib closure possible is leaking this) on long run times
-                        // truncates the vec if it's too large, to avoid massive potential leaks (the MIDI lib closure possible is leaking this) on long run times
+                    if event.state.detections.len() > 50 {
                         event.state.detections =
                             event.state.detections[event.state.detections.len() - 3..].to_vec()
                     }
