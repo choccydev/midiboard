@@ -1,4 +1,4 @@
-use super::types;
+use super::types::{self, LogLevel};
 use chrono;
 use colored::*;
 use config::{Config, ConfigError};
@@ -38,75 +38,134 @@ pub fn string_to_sstr(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
-pub fn stdout(selector: &str, message: &str) {
-    let time = chrono::offset::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-    // TODO:Minor implement debug level in the config
-    // TODO:Patch implement StdIO error handling
-    // TODO:Major implement "[FROM: {}]" to refer to spawned children messages. D this by adding an Option<> as last requirement with the cmd value
-    match selector {
-        "info" => {
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub struct Logger {
+    current_level: LogLevel,
+}
+
+impl Logger {
+    pub fn new(level: LogLevel) -> Self {
+        Logger {
+            current_level: level,
+        }
+    }
+
+    pub fn set_level(mut self: Self, level: LogLevel) {
+        self.current_level = level
+    }
+
+    fn get_time(self: Self) -> String {
+        chrono::offset::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+    }
+
+    pub fn dynamic(self: Self, message: &str, selector: &str, child: Option<&str>) {
+        match selector {
+            "info" => self.info(message),
+            "debug" => self.debug(message),
+            "error" => self.error(message),
+            "success" => self.success(message),
+            "fatal" => self.fatal(message),
+            "warn" => self.warn(message),
+            "message" => self.message(message, if let Some(name) = child { name } else { "" }),
+            &_ => self.default(message),
+        }
+    }
+
+    pub fn info(self: Self, message: &str) {
+        if self.current_level >= LogLevel::Info {
             println!(
                 "{} {} {}",
-                format!("[{}]", time).as_str().magenta(),
+                format!("[{}]", self.get_time()).as_str().magenta(),
                 "[INFO]".bright_blue().bold(),
                 message.bright_blue().italic()
             );
         }
-        "debug" => {
+    }
+
+    pub fn debug(self: Self, message: &str) {
+        if self.current_level >= LogLevel::Debug {
             println!(
                 "{} {} {}",
-                format!("[{}]", time).as_str().magenta(),
+                format!("[{}]", self.get_time()).as_str().magenta(),
                 "[DEBUG]".yellow().bold(),
                 message.yellow().italic()
             );
         }
-        "message" => {
+    }
+
+    pub fn message(self: Self, message: &str, child: &str) {
+        if self.current_level >= LogLevel::Error {
+            let child_name = child.to_uppercase().magenta();
             println!(
-                "{} {} {}",
-                format!("[{}]", time).as_str().magenta(),
+                "{} {} {} {}",
+                format!("[{}]", self.get_time()).as_str().magenta(),
                 "[MESSAGE]".yellow().bold(),
+                format!("{}{}{}", "[FROM ".magenta(), child_name, "]".magenta()).as_str(),
                 message.italic()
             );
         }
-        "fatal" => {
-            println!(
+    }
+
+    pub fn fatal(self: Self, message: &str) {
+        if self.current_level >= LogLevel::Error {
+            eprintln!(
                 "{} {} {}",
-                format!("[{}]", time).as_str().magenta(),
+                format!("[{}]", self.get_time()).as_str().magenta(),
                 "[FATAL]".bright_purple().bold(),
                 message.bright_red().bold()
             );
             assert!(false);
         }
-        "error" => {
-            println!(
+    }
+
+    pub fn error(self: Self, message: &str) {
+        if self.current_level >= LogLevel::Error {
+            eprintln!(
                 "{} {} {}",
-                format!("[{}]", time).as_str().magenta(),
+                format!("[{}]", self.get_time()).as_str().magenta(),
                 "[ERROR]".bright_red().bold(),
                 message.bright_red().italic()
             );
         }
-        "warning" => {
-            println!(
+    }
+
+    pub fn warn(self: Self, message: &str) {
+        if self.current_level >= LogLevel::Warn {
+            eprintln!(
                 "{} {} {}",
-                format!("[{}]", time).as_str().magenta(),
+                format!("[{}]", self.get_time()).as_str().magenta(),
                 "[WARN]".yellow().bold(),
                 message.yellow().italic()
             );
         }
-        "success" => {
+    }
+
+    pub fn success(self: Self, message: &str) {
+        if self.current_level >= LogLevel::Error {
             println!(
                 "{} {} {}",
-                format!("[{}]", time).as_str().magenta(),
+                format!("[{}]", self.get_time()).as_str().magenta(),
                 "[SUCCESS]".bright_green().bold(),
                 message.bright_green().italic()
             );
         }
-        _ => {
+    }
+
+    pub fn default(self: Self, message: &str) {
+        if self.current_level >= LogLevel::Error {
             println!(
                 "{} {}",
-                format!("[{}]", time).as_str().magenta(),
+                format!("[{}]", self.get_time()).as_str().magenta(),
                 message.normal().italic()
             );
+        }
+    }
+}
+
+impl Default for Logger {
+    fn default() -> Self {
+        Logger {
+            current_level: LogLevel::Debug,
         }
     }
 }
@@ -114,21 +173,23 @@ pub fn stdout(selector: &str, message: &str) {
 #[test]
 fn stdout_common() {
     let message = "test string";
-    let selectors = vec![
-        "info", "debug", "message", "success", "warning", "error", "",
-    ];
 
-    for selector in selectors {
-        let out = stdout(selector, message);
+    let log = Logger::new(LogLevel::Debug);
 
-        assert_eq!(out, ());
-    }
+    log.debug(message);
+    log.info(message);
+    log.warn(message);
+    log.error(message);
+    log.success(message);
+    log.message(message, "test");
 }
 
 #[test]
 #[should_panic]
 fn stdout_fatal() {
     let message = "test string";
-    let selector = "fatal";
-    stdout(selector, message);
+
+    let log = Logger::new(LogLevel::Debug);
+
+    log.fatal(message);
 }

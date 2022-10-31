@@ -59,7 +59,7 @@ fn validate_config(path: Option<&String>) -> Result<(), Error> {
 
     return match config {
         Ok(_) => {
-            util::stdout("success", "Config file validated correctly.");
+            util::Logger::success(Default::default(), "Config file validated correctly.");
             Ok(())
         }
         Err(error) => Err(Error::from(error)),

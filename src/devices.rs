@@ -1,3 +1,4 @@
+use super::types::LogLevel;
 use super::util;
 use anyhow::Error;
 use midir::{Ignore, MidiInput};
@@ -26,15 +27,16 @@ pub fn list_devices() -> Result<(), Error> {
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
-    util::stdout("info", "Currently connected devices:\n");
+    let log = util::Logger::new(LogLevel::Debug);
+
+    log.info("Currently connected devices:\n");
 
     let in_ports = midi_in.ports();
     match in_ports.len() {
         0 => return Err(Error::msg("No devices found.")),
         _ => {
             for (_i, p) in in_ports.iter().enumerate() {
-                util::stdout(
-                    "",
+                log.default(
                     &midi_in
                         .port_name(p)?
                         .split_terminator(':')
@@ -47,6 +49,7 @@ pub fn list_devices() -> Result<(), Error> {
 }
 
 pub fn listen_to_device(device: String) -> Result<(), Error> {
+    let log = util::Logger::new(LogLevel::Debug);
     let mut input = String::new();
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
@@ -73,16 +76,17 @@ pub fn listen_to_device(device: String) -> Result<(), Error> {
         }
     };
 
-    util::stdout("info", "Opening connection...");
+    log.info("Opening connection...");
 
     let _conn = match midi_in.connect(
         in_port,
         "midir-read-input",
         move |_stamp, message, _| {
-            util::stdout(
-                "",
-                util::string_to_sstr(format!("key: {}, value: {}", message[1], message[2])),
-            );
+            let closure_log = util::Logger::new(LogLevel::Debug);
+            closure_log.default(util::string_to_sstr(format!(
+                "key: {}, value: {}",
+                message[1], message[2]
+            )));
         },
         (),
     ) {
@@ -90,16 +94,16 @@ pub fn listen_to_device(device: String) -> Result<(), Error> {
         Err(error) => return Err(Error::msg(error.to_string())),
     };
 
-    util::stdout(
-        "success",
-        util::string_to_sstr(format!("Connection open, listening events from {}", device)),
-    );
+    log.success(util::string_to_sstr(format!(
+        "Connection open, listening events from {}",
+        device
+    )));
 
-    util::stdout("info", "Press any key to stop listening\n");
+    log.info("Press any key to stop listening\n");
 
     input.clear();
     stdin().read_line(&mut input)?; // wait for next enter key press
 
-    util::stdout("info", "Connection closed.");
+    log.info("Connection closed.");
     Ok(())
 }

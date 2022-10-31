@@ -124,7 +124,7 @@ fn main() {
     let runtime = run(matches);
     match runtime {
         Ok(()) => {}
-        Err(error) => util::stdout("fatal", &error.to_string()),
+        Err(error) => util::Logger::fatal(Default::default(), &error.to_string()),
     }
 }
 

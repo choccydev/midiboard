@@ -1,5 +1,6 @@
 {
     "$schema": "https://raw.githubusercontent.com/aordano/control-board/master/schema/midiboard.schema.json",
+    "log_level": "Warn",
     "config": [
         {
             "device": "Your Device Here",

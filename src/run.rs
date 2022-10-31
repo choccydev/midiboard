@@ -2,7 +2,7 @@ use super::types::{
     Activation, ActivationKind, Command, CommandData, CommandKind, Config, ControlList,
     ControlListByKey, InitialSwitchState, KeyEvent, KeyState,
 };
-use super::util;
+use super::util::{self, Logger};
 use anyhow::Error;
 use midir::{Ignore, MidiInput};
 use std::collections::HashMap;
@@ -16,24 +16,25 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
 
     let config_data = util::read_user_config(path)?;
 
+    let log_level = config_data.log_level.clone();
+
+    let log = Logger::new(log_level);
+
     for config in config_data.config {
         let builder = thread::Builder::new();
-        let handle = builder.spawn(move || handle_device(config.device.clone(), config))?;
+        let handle = builder.spawn(move || handle_device(config.device.clone(), config, log))?;
         match handle.join() {
             Ok(_) => {}
             Err(error) => {
-                println!("\n{:?}\n", error);
-                util::stdout(
-                    "fatal",
-                    "There has been a fatal error in a connection thread.",
-                )
+                log.default(format!("\n{:?}\n", error).as_str());
+                log.fatal("There has been a fatal error in a connection thread.");
             }
         };
     }
     Ok(())
 }
 
-pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
+pub fn handle_device(device: String, config: Config, log: Logger) -> Result<(), Error> {
     //FIXME:Patch check what's the deal with alsa_seq() leaking memory
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
@@ -73,7 +74,7 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
         states.insert(control.0, None);
     }
 
-    util::stdout("info", "Opening connection...");
+    log.info("Opening connection...");
 
     // TODO:Patch Refactor this connection thingy into its own function
     let conn = midi_in.connect(
@@ -85,8 +86,7 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
 
             match states.get(&key) {
                 Some(state) => {
-                    util::stdout(
-                        "",
+                    log.debug(
                         format!("Control {} detected.", &controls.get(&key).unwrap()).as_str(),
                     );
                     match on_key_event(key, state.clone(), &config, &controls, value) {
@@ -98,12 +98,12 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
                                             &key_event,
                                             &activation,
                                             &config.controls,
+                                            log,
                                         ) {
-                                            Ok(command) => util::stdout(
-                                                "info",
+                                            Ok(command) => log.info(
                                                 format!("Executed command {}", command).as_str(),
                                             ),
-                                            Err(error) => util::stdout("error", &error.to_string()),
+                                            Err(error) => log.error(&error.to_string()),
                                         };
                                         states.remove(&key);
                                         match &key_event.kind {
@@ -117,16 +117,14 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
                                         }
                                     }
                                 }
-                                Err(error) => util::stdout("error", &error.to_string()),
+                                Err(error) => log.error(&error.to_string()),
                             },
                             false => {
                                 states.remove(&key);
                                 states.insert(key, Some(key_event.state));
                             }
                         },
-                        Err(error) => {
-                            util::stdout("warn", &error.to_string());
-                        }
+                        Err(error) => log.error(&error.to_string()),
                     };
                 }
                 None => {}
@@ -139,7 +137,7 @@ pub fn handle_device(device: String, config: Config) -> Result<(), Error> {
         Ok(_) => loop {},
         Err(error) => {
             let error_kind = error.kind();
-            util::stdout("info", "Connection closed.");
+            log.info("Connection closed.");
             return Err(Error::msg(error_kind));
         }
     }
@@ -149,6 +147,7 @@ pub fn call_command(
     event: &KeyEvent,
     activation: &Activation,
     config_data: &ControlList,
+    log: Logger,
 ) -> Result<String, Error> {
     let command = &config_data
         .get(&event.state.control)
@@ -175,7 +174,7 @@ pub fn call_command(
                         command_data = &data.decrease;
                     }
 
-                    spawn_command(&event.state.control, command_data)
+                    spawn_command(&event.state.control, command_data, log)
                 } else {
                     return Err(Error::msg(
                         "Mismatched command types in activation and config at command call",
@@ -191,7 +190,7 @@ pub fn call_command(
                         command_data = &data.off;
                     }
 
-                    spawn_command(&event.state.control, command_data)
+                    spawn_command(&event.state.control, command_data, log)
                 } else {
                     return Err(Error::msg(
                         "Mismatched command types in activation and config at command call",
@@ -200,7 +199,7 @@ pub fn call_command(
             }
             Command::Trigger(data) => {
                 if let ActivationKind::Trigger = activation_data {
-                    spawn_command(&event.state.control, &data.execute)
+                    spawn_command(&event.state.control, &data.execute, log)
                 } else {
                     return Err(Error::msg(
                         "Mismatched command types in activation and config at command call",
@@ -215,17 +214,17 @@ pub fn call_command(
     }
 }
 
-pub fn spawn_command(control: &String, data: &CommandData) -> Result<String, Error> {
+pub fn spawn_command(control: &String, data: &CommandData, log: Logger) -> Result<String, Error> {
     let child = process::Command::new(data.cmd.clone())
         .args(data.args.clone())
         .output()?;
 
     if child.stdout.len() > 0 {
-        util::stdout("message", from_utf8(child.stdout.as_slice())?);
+        log.message(from_utf8(child.stdout.as_slice())?, data.cmd.as_str());
     }
 
     if child.stderr.len() > 0 {
-        util::stdout("error", from_utf8(child.stderr.as_slice())?);
+        log.message(from_utf8(child.stdout.as_slice())?, data.cmd.as_str());
     }
 
     let success = child.status.success();

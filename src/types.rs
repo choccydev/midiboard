@@ -13,6 +13,7 @@ pub struct Asset;
 #[derive(Debug, Deserialize)]
 pub struct ConfigFile {
     pub config: Vec<Config>,
+    pub log_level: LogLevel,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -39,6 +40,14 @@ pub struct TimeThreshold {
 pub struct Input {
     pub key: u8,
     pub command: Command,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, PartialOrd)]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
@@ -127,7 +136,6 @@ impl Command {
         }
     }
 }
-
 #[derive(Debug, Clone)]
 pub struct KeyState {
     // Target control of the detected key
