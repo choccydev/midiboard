@@ -6,12 +6,12 @@ license = "MIT"
 description = "CLI tool to trigger arbitrary commands using any MIDI 1.0 compatible device."
 homepage = "https://github.com/aordano/midiboard"
 repository = "https://github.com/aordano/midiboard"
-documentantion = "https://github.com/aordano/midiboard/tree/master/docs"
+documentation = "https://github.com/aordano/midiboard/tree/master/docs"
 readme = "README.md"
 
 [dependencies]
 midir = "0.8.0"
-clap = "3.1.18"
+clap = "3.2.23"
 config = "0.13.1"
 serde = "1.0.39"
 home = "0.5.3"
@@ -19,3 +19,6 @@ colored = "2.0.0"
 rust-embed = "6.4.0"
 anyhow = "1.0.64"
 chrono = "0.4.22"
+
+[dev-dependencies]
+tempfile = "3.3.0"
