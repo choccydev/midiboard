@@ -15,39 +15,39 @@ pub struct ConfigFile {
     pub config: Vec<Config>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Config {
     pub device: String,
     pub controls: ControlList,
     pub thresholds: Thresholds,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 pub struct Thresholds {
     pub encoder: TimeThreshold,
     pub switch: TimeThreshold,
     pub trigger: TimeThreshold,
 }
 // TODO:Minor Make `detection` threshold an Option<> or create a new struct for detection-less controls
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 pub struct TimeThreshold {
     pub activation: u64,
     pub detection: u64,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Input {
     pub key: u8,
     pub command: Command,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 pub enum InitialSwitchState {
     ON,
     OFF,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(tag = "kind")]
 pub enum Command {
     Encoder(Encoder),
@@ -55,25 +55,26 @@ pub enum Command {
     Trigger(Trigger),
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Encoder {
     pub increase: CommandData,
     pub decrease: CommandData,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Switch {
     pub on: CommandData,
     pub off: CommandData,
     pub initial_state: InitialSwitchState,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Trigger {
     pub execute: CommandData,
 }
 
 // TODO:Minor Add threshold override per-control
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct CommandData {
     pub cmd: String,
     pub args: Vec<String>,

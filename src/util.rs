@@ -111,3 +111,25 @@ pub fn stdout(selector: &str, message: &str) {
         }
     }
 }
+
+#[test]
+fn stdout_common() {
+    let message = "test string";
+    let selectors = vec![
+        "info", "debug", "message", "success", "warning", "error", "",
+    ];
+
+    for selector in selectors {
+        let out = stdout(selector, message);
+
+        assert_eq!(out, ());
+    }
+}
+
+#[test]
+#[should_panic]
+fn stdout_fatal() {
+    let message = "test string";
+    let selector = "fatal";
+    stdout(selector, message);
+}

@@ -5,6 +5,8 @@ use colored::*;
 mod config;
 mod devices;
 mod run;
+#[cfg(test)]
+mod tests;
 mod types;
 mod util;
 
