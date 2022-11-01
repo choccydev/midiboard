@@ -271,7 +271,7 @@ pub fn spawn_command(control: &String, data: &CommandData, log: Logger) -> Resul
     }
 
     if child.stderr.len() > 0 {
-        log.message(from_utf8(child.stdout.as_slice())?, data.cmd.as_str());
+        log.message(from_utf8(child.stderr.as_slice())?, data.cmd.as_str());
     }
 
     let success = child.status.success();
