@@ -48,6 +48,7 @@ pub enum LogLevel {
     Warn,
     Info,
     Debug,
+    Trace,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]

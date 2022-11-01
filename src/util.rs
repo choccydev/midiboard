@@ -93,6 +93,23 @@ impl Logger {
         }
     }
 
+    pub fn trace<T: Debug>(self: Self, message: &str, dump: Option<T>) {
+        if self.current_level >= LogLevel::Trace {
+            println!(
+                "{} {} {}{}",
+                format!("[{}]", self.get_time()).as_str().magenta(),
+                "[TRACE]".bold(),
+                message.italic(),
+                if let Some(data) = dump {
+                    format!("\n{}{:?}", "DUMP:".bold().magenta(), data)
+                } else {
+                    String::new()
+                }
+                .as_str()
+            );
+        }
+    }
+
     pub fn message(self: Self, message: &str, child: &str) {
         if self.current_level >= LogLevel::Error {
             let child_name = child.to_uppercase().magenta();

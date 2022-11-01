@@ -14,7 +14,7 @@
         "log_level": {
             "description": "Which levels of logs are printed.",
             "type": "string",
-            "enum": ["Debug", "Info", "Warn", "Error"]
+            "enum": ["Debug", "Info", "Warn", "Error", "Trace"]
         },
         "config": {
             "description": "The actual configuration data. It's an array containing multiple possible devices and their controls.",

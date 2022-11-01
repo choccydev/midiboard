@@ -339,7 +339,7 @@ pub fn on_key_event(
     }
 }
 
-pub fn debounce(event: &mut KeyEvent) -> Result<Activation, Error> {
+pub fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
     let activation_threshold = event.state.activation_threshold;
     let time_threshold = event.state.time_threshold;
     let elapsed = event.elapsed.unwrap();
@@ -355,6 +355,8 @@ pub fn debounce(event: &mut KeyEvent) -> Result<Activation, Error> {
                 // TODO:Patch Refactor this accumulator function stuff into its own function
                 let mut accumulator: i16 = 0;
 
+                log.trace("Encoder debounce: Correct activation", Some(&event));
+
                 // FIXME:Patch This encoder accumulator function is kinda weird, sums weirdly at high values
                 for (index, detection) in event.state.detections.iter().enumerate() {
                     if index % 2 == 0 {
@@ -364,27 +366,42 @@ pub fn debounce(event: &mut KeyEvent) -> Result<Activation, Error> {
                     }
                 }
 
+                log.trace("Encoder debounce: Accumulator", Some(&accumulator));
+
                 let is_increase = accumulator.lt(&0);
 
                 // then reset the detection vec to account for a new detection next time
                 event.state.detections = Vec::new();
 
-                Ok(Activation {
+                let activation = Activation {
                     valid: true,
                     kind: Some(ActivationKind::Encoder {
                         increase: is_increase,
                     }),
-                })
+                };
+
+                log.trace("Encoder debounce: Activation data", Some(&activation));
+
+                Ok(activation)
             } else {
                 if elapsed.lt(&time_threshold) {
                     // remove detection from pool
                     event.state.detections.pop();
+
+                    log.trace(
+                        "Encoder debounce: Spurious activation over detecion threshold",
+                        Some(&event),
+                    );
 
                     Ok(Activation {
                         valid: false,
                         kind: None,
                     })
                 } else {
+                    log.trace(
+                        "Encoder debounce: Spurious activation under detecion threshold",
+                        Some(&event),
+                    );
                     Ok(Activation {
                         valid: false,
                         kind: None,
