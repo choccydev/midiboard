@@ -4,7 +4,9 @@ use super::types::{
 };
 use super::util::{self, Logger};
 use anyhow::Error;
-use midir::{Ignore, MidiInput};
+use midir::{
+    ConnectError, ConnectErrorKind, Ignore, MidiInput, MidiInputConnection, MidiInputPort,
+};
 use std::collections::HashMap;
 use std::process;
 use std::str::from_utf8;
@@ -36,35 +38,8 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
 
 pub fn handle_device(device: String, config: Config, log: Logger) -> Result<(), Error> {
     //FIXME:Patch check what's the deal with alsa_seq() leaking memory
-    let mut midi_in = MidiInput::new("midir reading input")?;
-    midi_in.ignore(Ignore::None);
 
     //TODO:Minor Add error handling in case of dropped connection or device error (maybe with a heartbeat? The midir lib sucks)
-
-    // TODO:Patch Refactor this get-port thingy into its own function
-    // Get an input port (read from config file)
-    let in_ports = midi_in.ports();
-    let in_port = match in_ports.len() {
-        0 => return Err(Error::msg("No devices found.")),
-        _ => {
-            let mut selected_port = 0;
-
-            for (index, port) in in_ports.iter().enumerate() {
-                if midi_in
-                    .port_name(port)
-                    .unwrap()
-                    .as_str()
-                    .to_lowercase()
-                    .contains(&device.to_lowercase())
-                {
-                    selected_port = index;
-                }
-            }
-            in_ports
-                .get(selected_port)
-                .ok_or(Error::msg("Device not found."))?
-        }
-    };
 
     let controls = config.get_controls_by_key();
 
@@ -76,9 +51,39 @@ pub fn handle_device(device: String, config: Config, log: Logger) -> Result<(), 
 
     log.info("Opening connection...");
 
-    // TODO:Patch Refactor this connection thingy into its own function
-    let conn = midi_in.connect(
-        in_port,
+    let conn = create_connection(&device, states, controls, config, log);
+
+    match conn {
+        Ok(_) => loop {},
+        Err(error) => {
+            let error_kind = error.kind();
+            log.info("Connection closed.");
+            return Err(Error::msg(error_kind));
+        }
+    }
+}
+
+pub fn create_connection(
+    device: &String,
+    mut states: HashMap<u8, Option<KeyState>>,
+    controls: HashMap<u8, String>,
+    config: Config,
+    log: Logger,
+) -> Result<MidiInputConnection<()>, ConnectError<MidiInput>> {
+    let input_result = MidiInput::new("midir reading input");
+
+    let mut input = match input_result {
+        Ok(data) => data,
+        Err(_) => {
+            log.fatal("Error attempting to read MIDI bus");
+            unreachable!()
+        }
+    };
+    input.ignore(Ignore::None);
+
+    let port = get_in_port(&input, &device, log)?;
+    input.connect(
+        &port.clone(),
         &device,
         move |_stamp, message, _| {
             let key = message[1];
@@ -91,7 +96,7 @@ pub fn handle_device(device: String, config: Config, log: Logger) -> Result<(), 
                     );
                     match on_key_event(key, state.clone(), &config, &controls, value) {
                         Ok(mut key_event) => match key_event.initialized {
-                            true => match debounce(&mut key_event) {
+                            true => match debounce(&mut key_event, log) {
                                 Ok(activation) => {
                                     if activation.valid {
                                         match call_command(
@@ -131,14 +136,56 @@ pub fn handle_device(device: String, config: Config, log: Logger) -> Result<(), 
             }
         },
         (),
-    );
+    )
+}
 
-    match conn {
-        Ok(_) => loop {},
-        Err(error) => {
-            let error_kind = error.kind();
-            log.info("Connection closed.");
-            return Err(Error::msg(error_kind));
+pub fn get_in_port(
+    input: &MidiInput,
+    device: &str,
+    log: Logger,
+) -> Result<MidiInputPort, ConnectError<MidiInput>> {
+    let dummy_owned_input = match MidiInput::new(Default::default()) {
+        Ok(data) => data,
+        Err(_) => {
+            log.fatal("Error creating dummy input connection in port ennumeration");
+            unreachable!()
+        }
+    };
+
+    match input.ports().len() {
+        0 => {
+            return Err(ConnectError::new(
+                ConnectErrorKind::Other("Not allowed to use default Midi-Through"),
+                dummy_owned_input,
+            ))
+        }
+        _ => {
+            let mut selected_port: Option<usize> = None;
+
+            for (index, port) in input.ports().iter().enumerate() {
+                if input
+                    .port_name(port)
+                    .unwrap()
+                    .as_str()
+                    .to_lowercase()
+                    .contains(&device.to_lowercase())
+                {
+                    selected_port = Some(index);
+                }
+            }
+            match selected_port {
+                Some(correct_port) => match input.ports().clone().get(correct_port) {
+                    Some(port_connector) => Ok(port_connector.clone()),
+                    None => Err(ConnectError::new(
+                        ConnectErrorKind::InvalidPort,
+                        dummy_owned_input,
+                    )),
+                },
+                None => Err(ConnectError::new(
+                    ConnectErrorKind::Other("No valid port selected"),
+                    dummy_owned_input,
+                )),
+            }
         }
     }
 }
