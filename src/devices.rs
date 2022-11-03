@@ -8,7 +8,6 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
     let list = cli
         .get_one::<bool>("list")
         .ok_or(Error::msg("Bad --list command."))?;
-    println!("{:?}", list);
     let listen = cli.get_one::<String>("listen");
 
     if *list {
@@ -26,7 +25,7 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
     panic!("No valid argument provided to the config subcommand.")
 }
 
-pub fn list_devices() -> Result<(), Error> {
+fn list_devices() -> Result<(), Error> {
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
@@ -51,7 +50,7 @@ pub fn list_devices() -> Result<(), Error> {
     return Ok(());
 }
 
-pub fn listen_to_device(device: String) -> Result<(), Error> {
+fn listen_to_device(device: String) -> Result<(), Error> {
     let log = util::Logger::new(LogLevel::Debug);
     let mut user_input = String::new();
     let mut midi_input = MidiInput::new("Midiboard: Device Listener")?;

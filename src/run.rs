@@ -56,7 +56,7 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn handle_device(device: String, config: Config, log: Logger) -> Result<(), Error> {
+fn handle_device(device: String, config: Config, log: Logger) -> Result<(), Error> {
     //FIXME:Patch check what's the deal with alsa_seq() leaking memory
 
     //TODO:Minor Add error handling in case of dropped connection or device error (maybe with a heartbeat? The midir lib sucks)
@@ -89,7 +89,7 @@ pub fn handle_device(device: String, config: Config, log: Logger) -> Result<(), 
     }
 }
 
-pub fn create_connection(
+fn create_connection(
     device: &String,
     mut states: HashMap<u8, Option<KeyState>>,
     controls: HashMap<u8, String>,
@@ -194,7 +194,7 @@ pub fn create_connection(
     }
 }
 
-pub fn call_command(
+fn call_command(
     event: &KeyEvent,
     activation: &Activation,
     config_data: &ControlList,
@@ -265,7 +265,7 @@ pub fn call_command(
     }
 }
 
-pub fn spawn_command(control: &String, data: &CommandData, log: Logger) -> Result<String, Error> {
+fn spawn_command(control: &String, data: &CommandData, log: Logger) -> Result<String, Error> {
     let child = process::Command::new(data.cmd.clone())
         .args(data.args.clone())
         .output()?;
@@ -287,7 +287,7 @@ pub fn spawn_command(control: &String, data: &CommandData, log: Logger) -> Resul
     }
 }
 
-pub fn on_key_event(
+fn on_key_event(
     key: u8,
     state: Option<KeyState>,
     config: &Config,
@@ -343,7 +343,7 @@ pub fn on_key_event(
     }
 }
 
-pub fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
+fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
     let activation_threshold = event.state.activation_threshold;
     let time_threshold = event.state.time_threshold;
     let elapsed = event.elapsed.unwrap();
