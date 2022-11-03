@@ -4,9 +4,7 @@ use super::types::{
 };
 use super::util::{self, Logger};
 use anyhow::Error;
-use midir::{
-    ConnectError, ConnectErrorKind, Ignore, MidiInput, MidiInputConnection, MidiInputPort,
-};
+use midir::{Ignore, MidiInput, MidiInputConnection};
 use std::collections::HashMap;
 use std::process;
 use std::str::from_utf8;
@@ -22,9 +20,31 @@ pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
 
     let log = Logger::new(log_level);
 
+    log.trace(
+        "configuration file loaded correctly, log level set.",
+        Some(&config_data),
+    );
+
     for config in config_data.config {
         let builder = thread::Builder::new();
-        let handle = builder.spawn(move || handle_device(config.device.clone(), config, log))?;
+
+        log.trace("Built new thread", &builder);
+
+        log.trace("Passing current config to device handler", &config);
+
+        let handle =
+            builder.spawn(
+                move || match handle_device(config.device.clone(), config, log) {
+                    Ok(_) => (),
+                    Err(error) => {
+                        log.error(error.to_string().as_str());
+                        log.warn("Probably exiting now.");
+                    }
+                },
+            )?;
+
+        log.trace("Thread started and handle set", &handle);
+
         match handle.join() {
             Ok(_) => {}
             Err(error) => {
@@ -43,22 +63,28 @@ pub fn handle_device(device: String, config: Config, log: Logger) -> Result<(), 
 
     let controls = config.get_controls_by_key();
 
+    log.trace("Gotr controls list indexed by key", &controls);
+
     let mut states: HashMap<u8, Option<KeyState>> = HashMap::new();
 
     for control in controls.clone() {
         states.insert(control.0, None);
     }
 
+    log.trace("State set and populated", &states);
+
     log.info("Opening connection...");
 
     let conn = create_connection(&device, states, controls, config, log);
 
     match conn {
-        Ok(_) => loop {},
+        Ok(_) => {
+            log.trace("Connection created correctly, starting main loop", "");
+            loop {}
+        }
         Err(error) => {
-            let error_kind = error.kind();
-            log.info("Connection closed.");
-            return Err(Error::msg(error_kind));
+            log.warn("Something went wrong. Connection closed.");
+            return Err(error);
         }
     }
 }
@@ -69,62 +95,86 @@ pub fn create_connection(
     controls: HashMap<u8, String>,
     config: Config,
     log: Logger,
-) -> Result<MidiInputConnection<()>, ConnectError<MidiInput>> {
-    let input_result = MidiInput::new("midir reading input");
+) -> Result<MidiInputConnection<()>, Error> {
+    let mut midi_input = MidiInput::new("Midiboard: Runtime")?;
+    midi_input.ignore(Ignore::None);
 
-    let mut input = match input_result {
-        Ok(data) => data,
-        Err(_) => {
-            log.fatal("Error attempting to read MIDI bus");
-            unreachable!()
-        }
-    };
-    input.ignore(Ignore::None);
+    log.trace(
+        "Connecting and Waiting for messages to execute callback",
+        "",
+    );
 
-    let port = get_in_port(&input, &device, log)?;
-    input.connect(
+    let port = util::get_input_port(&device, log)?;
+    match midi_input.connect(
         &port.clone(),
         &device,
         move |_stamp, message, _| {
             let key = message[1];
             let value = message[2];
 
+            log.trace(
+                "Callback reached, testing if it's a valid control",
+                format!("key: {}, velocity: {}", key, value).as_str(),
+            );
+
             match states.get(&key) {
                 Some(state) => {
                     log.debug(
                         format!("Control {} detected.", &controls.get(&key).unwrap()).as_str(),
                     );
+                    log.trace("Testing for state initialization", &state);
                     match on_key_event(key, state.clone(), &config, &controls, value) {
                         Ok(mut key_event) => match key_event.initialized {
-                            true => match debounce(&mut key_event, log) {
-                                Ok(activation) => {
-                                    if activation.valid {
-                                        match call_command(
-                                            &key_event,
-                                            &activation,
-                                            &config.controls,
-                                            log,
-                                        ) {
-                                            Ok(command) => log.info(
-                                                format!("Executed command {}", command).as_str(),
-                                            ),
-                                            Err(error) => log.error(&error.to_string()),
-                                        };
-                                        states.remove(&key);
-                                        match &key_event.kind {
-                                            CommandKind::Switch => {
-                                                // Persist state for switches
-                                                states.insert(key, Some(key_event.state));
+                            true => {
+                                log.trace("State is initialized, starting debounce", &key_event);
+                                match debounce(&mut key_event, log) {
+                                    Ok(activation) => {
+                                        log.trace("Detection data passed", &activation);
+                                        if activation.valid {
+                                            log.trace("Activation valid, calling commands", "");
+                                            match call_command(
+                                                &key_event,
+                                                &activation,
+                                                &config.controls,
+                                                log,
+                                            ) {
+                                                Ok(command) => log.info(
+                                                    format!("Executed command {}", command)
+                                                        .as_str(),
+                                                ),
+                                                Err(error) => log.error(&error.to_string()),
+                                            };
+                                            log.trace(
+                                                "Managing current state",
+                                                &states.get(&key).unwrap(),
+                                            );
+                                            states.remove(&key);
+                                            match &key_event.kind {
+                                                CommandKind::Switch => {
+                                                    log.trace(
+                                                        "Event is from a Switch, state is kept",
+                                                        &key_event.state,
+                                                    );
+                                                    // Persist state for switches
+                                                    states.insert(key, Some(key_event.state));
+                                                }
+                                                _ => {
+                                                    log.trace("State is discarded", "");
+                                                    states.insert(key, None);
+                                                }
                                             }
-                                            _ => {
-                                                states.insert(key, None);
-                                            }
+                                        } else {
+                                            log.trace("Activation invalid", &activation);
                                         }
                                     }
+                                    Err(error) => log.error(&error.to_string()),
                                 }
-                                Err(error) => log.error(&error.to_string()),
-                            },
+                            }
                             false => {
+                                log.trace(
+                                    "State is not initialized, populating it",
+                                    &key_event.state,
+                                );
                                 states.remove(&key);
                                 states.insert(key, Some(key_event.state));
                             }
@@ -132,61 +182,15 @@ pub fn create_connection(
                         Err(error) => log.error(&error.to_string()),
                     };
                 }
-                None => {}
+                None => {
+                    log.trace("Not a valid control", "");
+                }
             }
         },
         (),
-    )
-}
-
-pub fn get_in_port(
-    input: &MidiInput,
-    device: &str,
-    log: Logger,
-) -> Result<MidiInputPort, ConnectError<MidiInput>> {
-    let dummy_owned_input = match MidiInput::new(Default::default()) {
-        Ok(data) => data,
-        Err(_) => {
-            log.fatal("Error creating dummy input connection in port ennumeration");
-            unreachable!()
-        }
-    };
-
-    match input.ports().len() {
-        0 => {
-            return Err(ConnectError::new(
-                ConnectErrorKind::Other("Not allowed to use default Midi-Through"),
-                dummy_owned_input,
-            ))
-        }
-        _ => {
-            let mut selected_port: Option<usize> = None;
-
-            for (index, port) in input.ports().iter().enumerate() {
-                if input
-                    .port_name(port)
-                    .unwrap()
-                    .as_str()
-                    .to_lowercase()
-                    .contains(&device.to_lowercase())
-                {
-                    selected_port = Some(index);
-                }
-            }
-            match selected_port {
-                Some(correct_port) => match input.ports().clone().get(correct_port) {
-                    Some(port_connector) => Ok(port_connector.clone()),
-                    None => Err(ConnectError::new(
-                        ConnectErrorKind::InvalidPort,
-                        dummy_owned_input,
-                    )),
-                },
-                None => Err(ConnectError::new(
-                    ConnectErrorKind::Other("No valid port selected"),
-                    dummy_owned_input,
-                )),
-            }
-        }
+    ) {
+        Ok(connection) => Ok(connection),
+        Err(error) => Err(Error::msg(error.kind().clone().to_string())),
     }
 }
 
@@ -355,7 +359,7 @@ pub fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> 
                 // TODO:Patch Refactor this accumulator function stuff into its own function
                 let mut accumulator: i16 = 0;
 
-                log.trace("Encoder debounce: Correct activation", Some(&event));
+                log.trace("Encoder debounce: Correct activation", &event);
 
                 // FIXME:Patch This encoder accumulator function is kinda weird, sums weirdly at high values
                 for (index, detection) in event.state.detections.iter().enumerate() {
@@ -366,7 +370,7 @@ pub fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> 
                     }
                 }
 
-                log.trace("Encoder debounce: Accumulator", Some(&accumulator));
+                log.trace("Encoder debounce: Accumulator", &accumulator);
 
                 let is_increase = accumulator.lt(&0);
 
@@ -380,7 +384,7 @@ pub fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> 
                     }),
                 };
 
-                log.trace("Encoder debounce: Activation data", Some(&activation));
+                log.trace("Encoder debounce: Activation data", &activation);
 
                 Ok(activation)
             } else {

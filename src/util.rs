@@ -1,8 +1,11 @@
 use super::types::{self, LogLevel};
+use anyhow::Error;
 use chrono;
 use colored::*;
 use config::{Config, ConfigError};
+use core::fmt::Debug;
 use home::home_dir;
+use midir::{Ignore, MidiInput, MidiInputPort};
 use std::path::PathBuf;
 
 pub fn read_user_config(path: Option<&String>) -> Result<types::ConfigFile, ConfigError> {
@@ -36,6 +39,55 @@ pub fn read_user_config(path: Option<&String>) -> Result<types::ConfigFile, Conf
 // From https://stackoverflow.com/a/52367953/16134348
 pub fn string_to_sstr(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
+}
+
+pub fn get_input_port(device: &str, log: Logger) -> Result<MidiInputPort, Error> {
+    let mut input = MidiInput::new("Midiboard: Port Reader")?;
+    input.ignore(Ignore::None);
+    match input.ports().len() {
+        0 => return Err(Error::msg("No ports detected. Is ALSA Seq running?")),
+        _ => {
+            log.trace("Ports detected", "");
+            let mut selected_port: Option<usize> = None;
+            let mut port_name_list = Vec::new();
+
+            for (index, port) in input.ports().iter().enumerate() {
+                log.trace(format!("Testing port {}", &index).as_str(), "");
+                let raw_name = input.port_name(port)?;
+                port_name_list.push(raw_name);
+            }
+
+            for (index, _) in input.ports().iter().enumerate() {
+                let port_name: &str = port_name_list[index].split(':').collect::<Vec<&str>>()[0];
+
+                let cleaned_name = port_name.to_lowercase().replace(" ", "");
+                let cleaned_device_name = &device.to_lowercase().replace(" ", "");
+
+                if cleaned_name.eq(cleaned_device_name) {
+                    log.trace(
+                        format!("Port {} matches device {}", &index, &device).as_str(),
+                        "",
+                    );
+                    selected_port = Some(index);
+                }
+            }
+            match selected_port {
+                Some(correct_port) => match input.ports().clone().get(correct_port) {
+                    Some(port_connector) => Ok(port_connector.clone()),
+                    None => Err(Error::msg("No valid port found. Probably the device was disconnected or the ports changed mid-connection.")),
+                },
+                None => {
+                    log.warn("Failed to connect to selected device. Selected device:");
+                    log.default(device);
+                    log.warn("Available devices:");
+                    for name in port_name_list {
+                        log.default(&name);
+                    }
+                    Err(Error::msg("No valid port found. Probably the device wasn't found or the ports changed mid-connection."))
+                },
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]
@@ -93,15 +145,17 @@ impl Logger {
         }
     }
 
-    pub fn trace<T: Debug>(self: Self, message: &str, dump: Option<T>) {
+    pub fn trace<T: Debug>(self: Self, message: &str, dump: T) {
         if self.current_level >= LogLevel::Trace {
+            let dump_formatted = format!("{:?}", dump);
+
             println!(
                 "{} {} {}{}",
                 format!("[{}]", self.get_time()).as_str().magenta(),
                 "[TRACE]".bold(),
                 message.italic(),
-                if let Some(data) = dump {
-                    format!("\n{}{:?}", "DUMP:".bold().magenta(), data)
+                if dump_formatted != "\"\"" {
+                    format!("\n{}{}", "DUMP:".bold().magenta(), dump_formatted.as_str())
                 } else {
                     String::new()
                 }
@@ -131,6 +185,7 @@ impl Logger {
                 "[FATAL]".bright_purple().bold(),
                 message.bright_red().bold()
             );
+            // FIXME:Patch Make it so the assert doesn't return a panic data.
             assert!(false);
         }
     }
