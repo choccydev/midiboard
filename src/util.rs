@@ -81,7 +81,7 @@ pub fn get_input_port(device: &str, log: Logger) -> Result<MidiInputPort, Error>
                     log.default(device);
                     log.warn("Available devices:");
                     for name in port_name_list {
-                        log.default(&name);
+                        log.default(&name.split(':').collect::<Vec<&str>>()[0]);
                     }
                     Err(Error::msg("No valid port found. Probably the device wasn't found or the ports changed mid-connection."))
                 },
@@ -102,7 +102,7 @@ impl Logger {
         }
     }
 
-    pub fn set_level(mut self: Self, level: LogLevel) {
+    pub fn change_level(mut self: Self, level: LogLevel) {
         self.current_level = level
     }
 
