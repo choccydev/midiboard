@@ -8,15 +8,19 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
-    let generate = cli.is_present("generate");
-    let validate = cli.is_present("validate");
+    let generate = cli
+        .get_one::<bool>("generate")
+        .ok_or(Error::msg("Bad --generate command."))?;
+    let validate = cli
+        .get_one::<bool>("validate")
+        .ok_or(Error::msg("Bad --validate command."))?;
     let path = cli.get_one::<String>("path");
 
-    if generate {
+    if *generate {
         return generate_config(path);
     }
 
-    if validate {
+    if *validate {
         return validate_config(path);
     }
 

@@ -5,14 +5,17 @@ use midir::{Ignore, MidiInput};
 use std::io::stdin;
 
 pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
-    let list = cli.contains_id("list");
-    let listen = cli.contains_id("listen");
+    let list = cli
+        .get_one::<bool>("list")
+        .ok_or(Error::msg("Bad --list command."))?;
+    println!("{:?}", list);
+    let listen = cli.get_one::<String>("listen");
 
-    if list {
+    if *list {
         return list_devices();
     }
 
-    if listen {
+    if listen.is_some() {
         let device = cli
             .get_one::<String>("listen")
             .ok_or(Error::msg("No device name provided"))?
