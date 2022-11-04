@@ -356,23 +356,25 @@ fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
     match event.kind {
         CommandKind::Encoder => {
             if elapsed.gt(&activation_threshold) {
-                // TODO:Patch Refactor this accumulator function stuff into its own function
-                let mut accumulator: i16 = 0;
-
                 log.trace("Encoder debounce: Correct activation", &event);
-
-                // FIXME:Patch This encoder accumulator function is kinda weird, sums weirdly at high values
-                for (index, detection) in event.state.detections.iter().enumerate() {
-                    if index % 2 == 0 {
-                        accumulator += Into::<i16>::into(*detection);
-                    } else {
-                        accumulator -= Into::<i16>::into(*detection);
-                    }
-                }
+                // TODO:Patch Give better error messages
+                let accumulator = Into::<i16>::into(
+                    *event
+                        .state
+                        .detections
+                        .last()
+                        .ok_or(Error::msg("Detections list is empty? what"))?,
+                ) - Into::<i16>::into(
+                    *event
+                        .state
+                        .detections
+                        .first()
+                        .ok_or(Error::msg("Detections list is empty? what"))?,
+                );
 
                 log.trace("Encoder debounce: Accumulator", &accumulator);
 
-                let is_increase = accumulator.lt(&0);
+                let is_increase = accumulator.gt(&0);
 
                 // then reset the detection vec to account for a new detection next time
                 event.state.detections = Vec::new();
