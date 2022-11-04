@@ -119,6 +119,7 @@ impl Logger {
             "fatal" => self.fatal(message),
             "warn" => self.warn(message),
             "message" => self.message(message, if let Some(name) = child { name } else { "" }),
+            "trace" => self.trace(message, ""),
             &_ => self.default(message),
         }
     }
@@ -147,7 +148,7 @@ impl Logger {
 
     pub fn trace<T: Debug>(self: Self, message: &str, dump: T) {
         if self.current_level >= LogLevel::Trace {
-            let dump_formatted = format!("{:?}", dump);
+            let dump_formatted = format!("{:#?}", dump);
 
             println!(
                 "{} {} {}{}",
