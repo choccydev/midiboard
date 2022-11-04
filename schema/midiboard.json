@@ -10,12 +10,10 @@
                     "detection": 40
                 },
                 "switch": {
-                    "activation": 400,
-                    "detection": 200
+                    "activation": 400
                 },
                 "trigger": {
-                    "activation": 1000,
-                    "detection": 0
+                    "activation": 1000
                 }
             },
             "controls": {

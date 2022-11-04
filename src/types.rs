@@ -25,15 +25,26 @@ pub struct Config {
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 pub struct Thresholds {
-    pub encoder: TimeThreshold,
+    pub encoder: FullTimeThreshold,
     pub switch: TimeThreshold,
     pub trigger: TimeThreshold,
 }
-// TODO:Minor Make `detection` threshold an Option<> or create a new struct for detection-less controls
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
+pub enum Threshold {
+    Full(FullTimeThreshold),
+    Base(TimeThreshold),
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
+pub struct FullTimeThreshold {
+    pub activation: u64,
+    pub detection: u64,
+}
+
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 pub struct TimeThreshold {
     pub activation: u64,
-    pub detection: u64,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -112,12 +123,6 @@ pub struct Activation {
 }
 
 impl Activation {
-    pub fn new(valid: bool, kind: Option<ActivationKind>) -> Self {
-        Activation {
-            valid: valid,
-            kind: kind,
-        }
-    }
     pub fn encoder(valid: bool, increase: bool) -> Self {
         Activation {
             valid: valid,
@@ -186,7 +191,7 @@ pub struct KeyState {
     // Target control of the detected key
     pub control: String,
     // Minimum time threshold in ms from last key detection to add here
-    pub time_threshold: Duration,
+    pub detection_threshold: Option<Duration>,
     // Elapsed time since first activation to consider activation finished
     pub activation_threshold: Duration,
     // value recorded at each detection
@@ -215,7 +220,7 @@ impl Config {
         list
     }
 
-    pub fn get_threshold(self: &Self, key: u8) -> Result<(CommandKind, TimeThreshold), Error> {
+    pub fn get_threshold(self: &Self, key: u8) -> Result<(CommandKind, Threshold), Error> {
         let by_key = self.get_controls_by_key();
         let control = by_key.get(&key).ok_or(Error::msg(format!(
             "Key {} not found for any control listed in the configuration.",
@@ -224,13 +229,19 @@ impl Config {
         let selection = self.get_control(control)?;
         match selection.command.get_kind() {
             CommandKind::Encoder => {
-                return Ok((CommandKind::Encoder, self.thresholds.encoder));
+                return Ok((
+                    CommandKind::Encoder,
+                    Threshold::Full(self.thresholds.encoder),
+                ));
             }
             CommandKind::Switch => {
-                return Ok((CommandKind::Switch, self.thresholds.switch));
+                return Ok((CommandKind::Switch, Threshold::Base(self.thresholds.switch)));
             }
             CommandKind::Trigger => {
-                return Ok((CommandKind::Trigger, self.thresholds.trigger));
+                return Ok((
+                    CommandKind::Trigger,
+                    Threshold::Base(self.thresholds.trigger),
+                ));
             }
         };
     }

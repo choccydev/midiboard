@@ -1,6 +1,6 @@
 use super::types::{
     Activation, ActivationKind, Command, CommandData, CommandKind, Config, ControlList,
-    ControlListByKey, InitialSwitchState, KeyEvent, KeyState,
+    ControlListByKey, InitialSwitchState, KeyEvent, KeyState, Threshold,
 };
 use super::util::{self, Logger};
 use anyhow::Error;
@@ -303,14 +303,24 @@ fn on_key_event(
         }
         Some(somekey) => {
             let threshold_data = config.get_threshold(key)?;
-            let threshold = threshold_data.1;
+            let activation_threshold: u64;
+            let mut detection_threshold: Option<Duration> = None;
+            match threshold_data.1 {
+                Threshold::Base(threshold) => {
+                    activation_threshold = threshold.activation;
+                }
+                Threshold::Full(threshold) => {
+                    detection_threshold = Some(Duration::from_millis(threshold.detection));
+                    activation_threshold = threshold.activation;
+                }
+            };
             match state {
                 None => {
                     let command_data = &config.get_control(somekey)?.command;
                     let mut new_state = KeyState {
                         control: somekey.clone(),
-                        time_threshold: Duration::from_millis(threshold.detection),
-                        activation_threshold: Duration::from_millis(threshold.activation),
+                        detection_threshold: detection_threshold,
+                        activation_threshold: Duration::from_millis(activation_threshold),
                         detections: Vec::new(),
                         start: Instant::now(),
                         initial_state: match command_data {
@@ -345,7 +355,7 @@ fn on_key_event(
 
 fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
     let activation_threshold = event.state.activation_threshold;
-    let time_threshold = event.state.time_threshold;
+    let time_threshold = event.state.detection_threshold;
     let elapsed = event.elapsed.unwrap();
 
     // TODO:Minor Add proportional reading of increases to actually modify data using percentuals
@@ -385,7 +395,7 @@ fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
 
                 activation.as_ok()
             } else {
-                if elapsed.lt(&time_threshold) {
+                if elapsed.lt(&time_threshold.unwrap()) {
                     // remove detection from pool
                     event.state.detections.pop();
 

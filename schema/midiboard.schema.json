@@ -244,7 +244,7 @@
                             },
                             "switch": {
                                 "type": "object",
-                                "description": "Time thresholds for activation and detecion of switch controls.",
+                                "description": "Time thresholds for activation of switch controls.",
                                 "properties": {
                                     "activation": {
                                         "description": "Activation threshold in milliseconds for a switch control. This is the total time elapsed since the first detection of the key that will be considered for detections without triggering a new command. Switches should usually lie between 200ms and 1000ms.",
@@ -252,21 +252,14 @@
                                         "minimum": 0,
                                         "maximum": 5000,
                                         "default": 300
-                                    },
-                                    "detection": {
-                                        "description": "Detection threshold in milliseconds for a switch control. This is the minimum time elapsed needed since the last detection of the key, to trigger a new detection. Switch detection time should usually lie between 10 and 70 ms. To completely nullify debouncing and avoid marking detections, you can set it to an equal or higher value than the activation threshold.",
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 500,
-                                        "default": 40
                                     }
                                 },
                                 "additionalProperties": false,
-                                "required": ["detection", "activation"]
+                                "required": ["activation"]
                             },
                             "trigger": {
                                 "type": "object",
-                                "description": "Time thresholds for activation and detecion of trigger controls.",
+                                "description": "Time thresholds for activation of trigger controls.",
                                 "properties": {
                                     "activation": {
                                         "description": "Activation threshold in milliseconds for a trigger control. This is the minimum time elapsed before triggering a new command. Triggers should usually lie between 1000ms and 10000ms.",
@@ -274,17 +267,10 @@
                                         "minimum": 0,
                                         "maximum": 10000,
                                         "default": 1000
-                                    },
-                                    "detection": {
-                                        "description": "Will be ignored for Trigger activations.",
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 0,
-                                        "default": 0
                                     }
                                 },
                                 "additionalProperties": false,
-                                "required": ["detection", "activation"]
+                                "required": ["activation"]
                             }
                         },
                         "additionalProperties": false,
