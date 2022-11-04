@@ -43,6 +43,10 @@
                             "cmd": "playerctl",
                             "args": ["next"]
                         }
+                    },
+                    "threshold": {
+                        "activation": 1000,
+                        "detection": 300
                     }
                 },
                 "pause": {

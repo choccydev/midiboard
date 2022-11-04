@@ -205,7 +205,7 @@ fn call_command(
         .ok_or(Error::msg(
             "Missing config data or wrong control name provided at command call",
         ))?
-        .command;
+        .command();
 
     let activation_data = activation.kind.as_ref().ok_or(Error::msg(
         "Missing activation kind for registered activation at command call",
@@ -316,11 +316,27 @@ fn on_key_event(
             };
             match state {
                 None => {
-                    let command_data = &config.get_control(somekey)?.command;
+                    let control_data = &config.get_control(somekey)?;
+                    let command_data = control_data.command();
                     let mut new_state = KeyState {
                         control: somekey.clone(),
-                        detection_threshold: detection_threshold,
-                        activation_threshold: Duration::from_millis(activation_threshold),
+                        detection_threshold: if let Some(threshold) = control_data.threshold() {
+                            if let Threshold::Full(value) = threshold {
+                                Some(Duration::from_millis(value.detection))
+                            } else {
+                                detection_threshold
+                            }
+                        } else {
+                            detection_threshold
+                        },
+                        activation_threshold: if let Some(threshold) = control_data.threshold() {
+                            match threshold {
+                                Threshold::Base(data) => Duration::from_millis(data.activation),
+                                Threshold::Full(data) => Duration::from_millis(data.activation),
+                            }
+                        } else {
+                            Duration::from_millis(activation_threshold)
+                        },
                         detections: Vec::new(),
                         start: Instant::now(),
                         initial_state: match command_data {

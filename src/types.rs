@@ -31,6 +31,7 @@ pub struct Thresholds {
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
+#[serde(untagged)]
 pub enum Threshold {
     Full(FullTimeThreshold),
     Base(TimeThreshold),
@@ -53,6 +54,13 @@ pub struct Input {
     pub command: Command,
 }
 
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct InputOverride {
+    pub key: u8,
+    pub threshold: Threshold,
+    pub command: Command,
+}
+
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, PartialOrd)]
 pub enum LogLevel {
     Error,
@@ -66,6 +74,36 @@ pub enum LogLevel {
 pub enum InitialSwitchState {
     ON,
     OFF,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum InputOption {
+    Overrode(InputOverride),
+    Normal(Input),
+}
+
+impl InputOption {
+    pub fn key(self: &Self) -> u8 {
+        match self {
+            Self::Overrode(data) => data.key,
+            Self::Normal(data) => data.key,
+        }
+    }
+
+    pub fn command(self: &Self) -> Command {
+        match self {
+            Self::Overrode(data) => data.command.clone(),
+            Self::Normal(data) => data.command.clone(),
+        }
+    }
+
+    pub fn threshold(self: &Self) -> Option<Threshold> {
+        match self {
+            Self::Overrode(data) => Some(data.threshold),
+            Self::Normal(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -94,7 +132,6 @@ pub struct Trigger {
     pub execute: CommandData,
 }
 
-// TODO:Minor Add threshold override per-control
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct CommandData {
     pub cmd: String,
@@ -201,10 +238,11 @@ pub struct KeyState {
 }
 
 pub type ControlListByKey = HashMap<u8, String>; // HashMap<key code, control name>
-pub type ControlList = HashMap<String, Input>;
+
+pub type ControlList = HashMap<String, InputOption>;
 
 impl Config {
-    pub fn get_control(self: &Self, control: &String) -> Result<&Input, Error> {
+    pub fn get_control(self: &Self, control: &String) -> Result<&InputOption, Error> {
         self.controls.get(control).ok_or(Error::msg(format!(
             "Control {} not found in the loaded config",
             control
@@ -215,7 +253,7 @@ impl Config {
         let mut list = HashMap::new();
 
         for control in self.controls.clone() {
-            list.insert(control.1.key, control.0);
+            list.insert(control.1.key(), control.0);
         }
         list
     }
@@ -227,7 +265,7 @@ impl Config {
             key
         )))?;
         let selection = self.get_control(control)?;
-        match selection.command.get_kind() {
+        match selection.command().get_kind() {
             CommandKind::Encoder => {
                 return Ok((
                     CommandKind::Encoder,

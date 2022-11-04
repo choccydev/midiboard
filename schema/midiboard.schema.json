@@ -33,19 +33,19 @@
                         "type": "object",
                         "patternProperties": {
                             "^[a-z]{1}[a-z0-9_]+": {
-                                "oneOf": [
-                                    {
-                                        "type": "object",
-                                        "description": "Entry for control. It can be of either Encoder, Trigger, or Switch type according to the action performed on the device.",
-                                        "properties": {
-                                            "key": {
-                                                "description": "Key of the selected MIDI controller to listen for.",
-                                                "type": "integer",
-                                                "minimum": 0,
-                                                "maximum": 128,
-                                                "exclusiveMaximum": true
-                                            },
-                                            "command": {
+                                "type": "object",
+                                "description": "Entry for control. It can be of either Encoder, Trigger, or Switch type according to the action performed on the device.",
+                                "properties": {
+                                    "key": {
+                                        "description": "Key of the selected MIDI controller to listen for.",
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 128,
+                                        "exclusiveMaximum": true
+                                    },
+                                    "command": {
+                                        "oneOf": [
+                                            {
                                                 "type": "object",
                                                 "description": "Commands to execute on increase or decrease of the encoder value.",
                                                 "properties": {
@@ -95,21 +95,8 @@
                                                     "decrease",
                                                     "kind"
                                                 ]
-                                            }
-                                        }
-                                    },
-                                    {
-                                        "type": "object",
-                                        "description": "Entry for control. It can be of either Encoder, Trigger, or Switch type according to the action performed on the device.",
-                                        "properties": {
-                                            "key": {
-                                                "description": "Key of the selected MIDI controller to listen for.",
-                                                "type": "integer",
-                                                "minimum": 0,
-                                                "maximum": 128,
-                                                "exclusiveMaximum": true
                                             },
-                                            "command": {
+                                            {
                                                 "type": "object",
                                                 "description": "Commands to execute on a press of the switch.",
                                                 "properties": {
@@ -165,21 +152,8 @@
                                                     "initial_state",
                                                     "kind"
                                                 ]
-                                            }
-                                        }
-                                    },
-                                    {
-                                        "type": "object",
-                                        "description": "Entry for control. It can be of either Encoder, Trigger, or Switch type according to the action performed on the device.",
-                                        "properties": {
-                                            "key": {
-                                                "description": "Key of the selected MIDI controller to listen for.",
-                                                "type": "integer",
-                                                "minimum": 0,
-                                                "maximum": 128,
-                                                "exclusiveMaximum": true
                                             },
-                                            "command": {
+                                            {
                                                 "type": "object",
                                                 "description": "Commands to execute on a press of the trigger.",
                                                 "properties": {
@@ -209,12 +183,57 @@
                                                 "additionalProperties": false,
                                                 "required": ["execute", "kind"]
                                             }
-                                        }
+                                        ]
+                                    },
+                                    "threshold": {
+                                        "oneOf": [
+                                            {
+                                                "type": "object",
+                                                "description": "Time thresholds for activation and detecion of encoder controls.",
+                                                "properties": {
+                                                    "activation": {
+                                                        "description": "Activation threshold in milliseconds for a encoder control. This is the total time elapsed since the first detection of the associated key without triggering a new command. Encoder activation time should usually lie between 500ms and 2000ms.",
+                                                        "type": "integer",
+                                                        "minimum": 0,
+                                                        "maximum": 5000,
+                                                        "default": 750
+                                                    },
+                                                    "detection": {
+                                                        "description": "Detection threshold in milliseconds for a encoder control. This is the minimum time elapsed needed since the last detection of the key, to trigger a new detection. Encoder detection time should usually lie between 50 and 250 ms.",
+                                                        "type": "integer",
+                                                        "minimum": 0,
+                                                        "maximum": 500,
+                                                        "default": 300
+                                                    }
+                                                },
+                                                "additionalProperties": false,
+                                                "required": [
+                                                    "detection",
+                                                    "activation"
+                                                ]
+                                            },
+                                            {
+                                                "type": "object",
+                                                "description": "Time thresholds for activation and detecion of switch or trigger controls.",
+                                                "properties": {
+                                                    "activation": {
+                                                        "description": "Activation threshold in milliseconds for a switch or trigger control. This is the total time elapsed since the first detection of the associated key without triggering a new command. Encoder activation time should usually lie between 500ms and 2000ms.",
+                                                        "type": "integer",
+                                                        "minimum": 0,
+                                                        "maximum": 5000,
+                                                        "default": 750
+                                                    }
+                                                },
+                                                "additionalProperties": false,
+                                                "required": ["activation"]
+                                            }
+                                        ]
                                     }
-                                ]
+                                },
+                                "required": ["command", "key"],
+                                "additionalProperties": false
                             }
-                        },
-                        "additionalProperties": false
+                        }
                     },
                     "thresholds": {
                         "type": "object",
