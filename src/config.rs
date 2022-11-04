@@ -62,8 +62,19 @@ fn validate_config(path: Option<&String>) -> Result<(), Error> {
     let config = util::read_user_config(path);
 
     return match config {
-        Ok(_) => {
-            util::Logger::success(Default::default(), "Config file validated correctly.");
+        Ok(data) => {
+            let log = util::Logger::new(data.log_level);
+            log.dynamic(
+                format!(
+                    "Log level set at {:?}. Messages will be shown according to it.",
+                    data.log_level
+                )
+                .as_str(),
+                format!("{:?}", data.log_level).to_lowercase().as_str(),
+                None,
+            );
+            log.debug(format!("{:#?}", data).as_str());
+            log.success("Config file validated correctly.");
             Ok(())
         }
         Err(error) => Err(Error::from(error)),
