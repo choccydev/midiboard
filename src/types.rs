@@ -111,6 +111,42 @@ pub struct Activation {
     pub kind: Option<ActivationKind>,
 }
 
+impl Activation {
+    pub fn new(valid: bool, kind: Option<ActivationKind>) -> Self {
+        Activation {
+            valid: valid,
+            kind: kind,
+        }
+    }
+    pub fn encoder(valid: bool, increase: bool) -> Self {
+        Activation {
+            valid: valid,
+            kind: Some(ActivationKind::encoder(increase)),
+        }
+    }
+    pub fn switch(valid: bool, on: bool) -> Self {
+        Activation {
+            valid: valid,
+            kind: Some(ActivationKind::switch(on)),
+        }
+    }
+    pub fn trigger(valid: bool) -> Self {
+        Activation {
+            valid: valid,
+            kind: Some(ActivationKind::Trigger),
+        }
+    }
+    pub fn failed() -> Self {
+        Activation {
+            valid: false,
+            kind: None,
+        }
+    }
+    pub fn as_ok(self: Self) -> Result<Self, Error> {
+        Ok(self)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ActivationKind {
     Encoder { increase: bool },
@@ -125,6 +161,14 @@ impl ActivationKind {
             Self::Switch { on: _ } => CommandKind::Switch,
             Self::Trigger => CommandKind::Trigger,
         }
+    }
+
+    pub fn encoder(increase: bool) -> Self {
+        ActivationKind::Encoder { increase: increase }
+    }
+
+    pub fn switch(on: bool) -> Self {
+        ActivationKind::Switch { on: on }
     }
 }
 

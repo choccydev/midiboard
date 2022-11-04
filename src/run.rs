@@ -379,16 +379,11 @@ fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
                 // then reset the detection vec to account for a new detection next time
                 event.state.detections = Vec::new();
 
-                let activation = Activation {
-                    valid: true,
-                    kind: Some(ActivationKind::Encoder {
-                        increase: is_increase,
-                    }),
-                };
+                let activation = Activation::encoder(true, is_increase);
 
                 log.trace("Encoder debounce: Activation data", &activation);
 
-                Ok(activation)
+                activation.as_ok()
             } else {
                 if elapsed.lt(&time_threshold) {
                     // remove detection from pool
@@ -399,19 +394,13 @@ fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
                         Some(&event),
                     );
 
-                    Ok(Activation {
-                        valid: false,
-                        kind: None,
-                    })
+                    Activation::failed().as_ok()
                 } else {
                     log.trace(
                         "Encoder debounce: Spurious activation under detecion threshold",
                         Some(&event),
                     );
-                    Ok(Activation {
-                        valid: false,
-                        kind: None,
-                    })
+                    Activation::failed().as_ok()
                 }
             }
         }
@@ -430,17 +419,11 @@ fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
                         match initial_state {
                             InitialSwitchState::OFF => {
                                 event.state.detections = vec![255, 255];
-                                Ok(Activation {
-                                    valid: true,
-                                    kind: Some(ActivationKind::Switch { on: false }),
-                                })
+                                Activation::switch(true, false).as_ok()
                             }
                             InitialSwitchState::ON => {
                                 event.state.detections = vec![200, 200]; // 200 is an arbitrary choice, it does not matter.
-                                Ok(Activation {
-                                    valid: true,
-                                    kind: Some(ActivationKind::Switch { on: false }),
-                                })
+                                Activation::switch(true, false).as_ok()
                             }
                         }
                     } else {
@@ -467,19 +450,11 @@ fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
                             event.state.detections[event.state.detections.len() - 3..].to_vec()
                     }
 
-                    Ok(Activation {
-                        valid: true,
-                        kind: Some(ActivationKind::Switch {
-                            on: !is_currently_on,
-                        }),
-                    })
+                    Activation::switch(true, !is_currently_on).as_ok()
                 }
             } else {
                 event.state.detections.pop();
-                Ok(Activation {
-                    valid: false,
-                    kind: None,
-                })
+                Activation::failed().as_ok()
             }
         }
         CommandKind::Trigger => {
@@ -489,15 +464,9 @@ fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
                 event.state.detections = Vec::new();
                 event.elapsed = Some(Duration::from_millis(0));
 
-                Ok(Activation {
-                    valid: true,
-                    kind: Some(ActivationKind::Trigger),
-                })
+                Activation::trigger(true).as_ok()
             } else {
-                Ok(Activation {
-                    valid: false,
-                    kind: None,
-                })
+                Activation::failed().as_ok()
             }
         }
     }
