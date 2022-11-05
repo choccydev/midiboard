@@ -1,6 +1,6 @@
 [package]
 name = "midiboard"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 license = "MIT"
 description = "CLI tool to trigger arbitrary commands using any MIDI 1.0 compatible device."

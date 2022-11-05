@@ -12,7 +12,7 @@ mod util;
 
 fn main() {
     let matches = Command::new("midiboard")
-        .version("0.3.2")
+        .version("0.3.3")
         .author(util::string_to_sstr(format!("{}", "Agata Ordano - aordano@protonmail.com".bright_cyan())))
         .about("Utility that allows using an arbitrary MIDI controller as a control board.")
         .long_about(concat! ("This utility helps with the execution of frequent or specific tasks to be done using a MIDI controller to execute user-provided commands.\n", 
