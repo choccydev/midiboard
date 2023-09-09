@@ -54,7 +54,7 @@
                                                         "type": "string",
                                                         "const": "Encoder"
                                                     },
-                                                    "increase": {
+                                                    "execute": {
                                                         "description": "Command to be executed by Bash on detection of an increase in the encoder value.",
                                                         "type": "object",
                                                         "properties": {
@@ -68,33 +68,24 @@
                                                                 "items": {
                                                                     "type": "string"
                                                                 }
-                                                            }
-                                                        }
-                                                    },
-                                                    "decrease": {
-                                                        "description": "Command to be executed by Bash on detection of an decrease in the encoder value.",
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "cmd": {
-                                                                "description": "Base command to invoke.",
+                                                            },
+                                                            "map_min": {
+                                                                "description": "Integer to map to level 0 of the selected key.",
+                                                                "type": "integer"
+                                                            },
+                                                            "replace": {
+                                                                "description": "String to replace the mapped values for, either in CMD or ARGS",
                                                                 "type": "string"
                                                             },
-                                                            "args": {
-                                                                "description": "Args provided to the command.",
-                                                                "type": "array",
-                                                                "items": {
-                                                                    "type": "string"
-                                                                }
+                                                            "map_max": {
+                                                                "description": "Integer to map to level 127 of the selected key.",
+                                                                "type": "integer"
                                                             }
                                                         }
                                                     }
                                                 },
                                                 "additionalProperties": false,
-                                                "required": [
-                                                    "increase",
-                                                    "decrease",
-                                                    "kind"
-                                                ]
+                                                "required": ["execute", "kind"]
                                             },
                                             {
                                                 "type": "object",

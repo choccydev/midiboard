@@ -18,39 +18,24 @@
             },
             "controls": {
                 "volume": {
-                    "key": 0,
+                    "key": 7,
                     "command": {
                         "kind": "Encoder",
-                        "decrease": {
+                        "execute": {
                             "cmd": "pactl",
-                            "args": ["set-sink-volume", "@DEFAULT_SINK@", "-3%"]
-                        },
-                        "increase": {
-                            "cmd": "pactl",
-                            "args": ["set-sink-volume", "@DEFAULT_SINK@", "+3%"]
+                            "args": [
+                                "set-sink-volume",
+                                "@DEFAULT_SINK@",
+                                "@VOLUME_PERCENT@%"
+                            ],
+                            "replace": "@VOLUME_PERCENT@",
+                            "map_max": 101,
+                            "map_min": 0
                         }
-                    }
-                },
-                "song": {
-                    "key": 0,
-                    "command": {
-                        "kind": "Encoder",
-                        "decrease": {
-                            "cmd": "playerctl",
-                            "args": ["previous"]
-                        },
-                        "increase": {
-                            "cmd": "playerctl",
-                            "args": ["next"]
-                        }
-                    },
-                    "threshold": {
-                        "activation": 1000,
-                        "detection": 300
                     }
                 },
                 "pause": {
-                    "key": 0,
+                    "key": 45,
                     "command": {
                         "kind": "Trigger",
                         "execute": {

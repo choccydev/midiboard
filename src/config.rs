@@ -6,6 +6,12 @@ use home::home_dir;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+// TODO:Major Add interactive system and sub-subcommands to interactively generate and modify the config files
+//   Replace the `--generate` for a `new` subcommand. Make `new` generate a empty file unless it uses the flag `--skeleton`
+//   Add a `add` subcommand
+//   Add a `add device` subcommand to generate an entry on the `config` array
+//   Add a `add control` subcommand to insert a new control for the selected device
+//   Make the commands interactive via interaction with stdin
 
 pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
     let generate = cli

@@ -1,6 +1,6 @@
 use super::types::{self, LogLevel};
 use anyhow::Error;
-use chrono;
+use chrono::{self, Duration};
 use colored::*;
 use config::{Config, ConfigError};
 use core::fmt::Debug;
@@ -87,6 +87,37 @@ pub fn get_input_port(device: &str, log: Logger) -> Result<MidiInputPort, Error>
                 },
             }
         }
+    }
+}
+
+pub fn ease_input(threshold: &Duration, elapsed: &Duration, value: u8) -> u8 {
+    // Based off https://easings.net/#easeInOutQuad
+    let threshold_milis = Duration::num_milliseconds(threshold);
+    let elapsed_milis = Duration::num_milliseconds(elapsed);
+    let elapsed_norm = elapsed_milis as f64 / threshold_milis as f64;
+
+    let correction_factor: f64;
+
+    if elapsed_norm < 0.5 {
+        correction_factor = 2 as f64 * elapsed_norm.powi(2) - elapsed_norm;
+    } else {
+        let denominator: f64 = -2 as f64 * elapsed_norm + 2 as f64;
+        correction_factor = (denominator.powi(2) / 2 as f64) - elapsed_norm;
+    }
+
+    (value as f64 * correction_factor).round().clamp(0.0, 127.0) as u8
+}
+
+pub fn interpolate(map_min: i32, map_max: i32, value: u8) -> Result<f64, Error> {
+    if map_max < map_min {
+        return Err(Error::msg(
+            "Min value to map must not be more than the max value.",
+        ));
+    } else {
+        let interval: f64 = (map_max - map_min).into();
+        let value_float: f64 = value.into();
+        let proportion: f64 = value_float / 127.0;
+        return Ok(interval * proportion);
     }
 }
 

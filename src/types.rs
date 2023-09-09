@@ -116,8 +116,7 @@ pub enum Command {
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Encoder {
-    pub increase: CommandData,
-    pub decrease: CommandData,
+    pub execute: CommandData,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -136,6 +135,9 @@ pub struct Trigger {
 pub struct CommandData {
     pub cmd: String,
     pub args: Vec<String>,
+    pub replace: Option<String>,
+    pub map_max: Option<i32>,
+    pub map_min: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,7 +165,7 @@ impl Activation {
     pub fn encoder(valid: bool, increase: bool) -> Self {
         Activation {
             valid: valid,
-            kind: Some(ActivationKind::encoder(increase)),
+            kind: Some(ActivationKind::Encoder),
         }
     }
     pub fn switch(valid: bool, on: bool) -> Self {
@@ -191,7 +193,7 @@ impl Activation {
 
 #[derive(Debug, Clone)]
 pub enum ActivationKind {
-    Encoder { increase: bool },
+    Encoder,
     Switch { on: bool },
     Trigger,
 }
@@ -199,14 +201,10 @@ pub enum ActivationKind {
 impl ActivationKind {
     pub fn get_kind(self: &Self) -> CommandKind {
         match self {
-            Self::Encoder { increase: _ } => CommandKind::Encoder,
+            Self::Encoder => CommandKind::Encoder,
             Self::Switch { on: _ } => CommandKind::Switch,
             Self::Trigger => CommandKind::Trigger,
         }
-    }
-
-    pub fn encoder(increase: bool) -> Self {
-        ActivationKind::Encoder { increase: increase }
     }
 
     pub fn switch(on: bool) -> Self {

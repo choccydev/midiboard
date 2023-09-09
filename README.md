@@ -2,6 +2,8 @@
 
 CLI tool to trigger arbitrary commands using any MIDI 1.0 compatible  device.
 
+## Docs are oudated; trust more the schema file than this until it's updated
+
 <!-- vscode-markdown-toc -->
 * 1. [What is this?](#Whatisthis)
 * 2. [Getting Started](#GettingStarted)

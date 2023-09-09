@@ -214,18 +214,13 @@ fn call_command(
     if activation_data.get_kind() == command.get_kind() {
         match command {
             Command::Encoder(data) => {
-                if let ActivationKind::Encoder {
-                    increase: is_increase,
-                } = activation_data
-                {
-                    let command_data: &CommandData;
-                    if *is_increase {
-                        command_data = &data.increase;
-                    } else {
-                        command_data = &data.decrease;
-                    }
-
-                    spawn_command(&event.state.control, command_data, log)
+                if let ActivationKind::Encoder = activation_data {
+                    spawn_command(
+                        &event.state.control,
+                        &data.execute,
+                        &event.state.detections.last(),
+                        log,
+                    )
                 } else {
                     return Err(Error::msg(
                         "Mismatched command types in activation and config at command call",
@@ -240,8 +235,12 @@ fn call_command(
                     } else {
                         command_data = &data.off;
                     }
-
-                    spawn_command(&event.state.control, command_data, log)
+                    spawn_command(
+                        &event.state.control,
+                        command_data,
+                        &event.state.detections.last(),
+                        log,
+                    )
                 } else {
                     return Err(Error::msg(
                         "Mismatched command types in activation and config at command call",
@@ -250,7 +249,14 @@ fn call_command(
             }
             Command::Trigger(data) => {
                 if let ActivationKind::Trigger = activation_data {
-                    spawn_command(&event.state.control, &data.execute, log)
+                    // Yes your eyes are correct this is now exactly the same as the encoder.
+                    // I am keeping it duplicated in case something changes and i have to again modify this.
+                    spawn_command(
+                        &event.state.control,
+                        &data.execute,
+                        &event.state.detections.last(),
+                        log,
+                    )
                 } else {
                     return Err(Error::msg(
                         "Mismatched command types in activation and config at command call",
@@ -265,10 +271,61 @@ fn call_command(
     }
 }
 
-fn spawn_command(control: &String, data: &CommandData, log: Logger) -> Result<String, Error> {
-    let child = process::Command::new(data.cmd.clone())
-        .args(data.args.clone())
-        .output()?;
+fn spawn_command(
+    control: &String,
+    data: &CommandData,
+    value: &Option<&u8>,
+    log: Logger,
+) -> Result<String, Error> {
+    let args: Vec<String>;
+    let cmd: String;
+    if let Some(replace_string) = &data.replace {
+        match value {
+            None => {
+                return Ok("No value registered for a command that required one.".to_string());
+            }
+            Some(val) => {
+                if let None = data.map_max {
+                    return Err(Error::msg(
+                        "No max value mapped for a command that required it.".to_string(),
+                    ));
+                }
+
+                if let None = data.map_min {
+                    return Err(Error::msg(
+                        "No min value mapped for a command that required it.".to_string(),
+                    ));
+                }
+
+                let replace_value_int: i64 =
+                    util::interpolate(data.map_min.unwrap(), data.map_max.unwrap(), *val.clone())?
+                        as i64;
+                let args_map = data
+                    .args
+                    .clone()
+                    .iter()
+                    .map(|arg| arg.replace(replace_string, replace_value_int.to_string().as_str()))
+                    .collect();
+                cmd = data
+                    .cmd
+                    .clone()
+                    .replace(replace_string, replace_value_int.to_string().as_str());
+                args = args_map;
+            }
+        }
+    } else {
+        args = data.args.clone();
+        cmd = data.cmd.clone();
+    };
+
+    let mut cmd_data = HashMap::new();
+
+    cmd_data.insert("cmd", vec![cmd.clone()]);
+    cmd_data.insert("args", args.clone());
+
+    log.trace("COMMAND DATA:", cmd_data);
+
+    let child = process::Command::new(cmd).args(args).output()?;
 
     if child.stdout.len() > 0 {
         log.message(from_utf8(child.stdout.as_slice())?, data.cmd.as_str());
@@ -403,7 +460,7 @@ fn debounce(event: &mut KeyEvent, log: Logger) -> Result<Activation, Error> {
                 let is_increase = accumulator.gt(&0);
 
                 // then reset the detection vec to account for a new detection next time
-                event.state.detections = Vec::new();
+                event.state.detections = vec![event.state.detections.last().unwrap().clone()];
 
                 let activation = Activation::encoder(true, is_increase);
 
