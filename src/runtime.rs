@@ -148,8 +148,11 @@ fn device_thread(device: Device, tx: Sender<Event>, rx: Receiver<Event>) -> Resu
                     match rx.recv_timeout(left) {
                         Ok(Event::Shutdown) => return Ok(()),
                         Ok(Event::Done { control, job, outcome }) => {
-                            // No output while disconnected; just keep state.
-                            let _ = engine.handle(now(), Input::Done { control, job, outcome });
+                            // Follow-up commands (queued presses, state reads)
+                            // must still run, or the control stays "busy"
+                            // forever. Only MIDI output is dropped.
+                            let actions = engine.handle(now(), Input::Done { control, job, outcome });
+                            run_commands(actions, &tx);
                         }
                         Ok(Event::Midi(..)) => {}
                         Err(RecvTimeoutError::Timeout) => break,
@@ -217,6 +220,13 @@ fn send(out: &mut MidiOutputConnection, bytes: &[u8], device: &str) {
     }
 }
 
+fn spawn_run(control: usize, job: Job, exec: crate::engine::Rendered, tx: &Sender<Event>) {
+    let tx = tx.clone();
+    exec::spawn(job, exec, move |outcome| {
+        let _ = tx.send(Event::Done { control, job, outcome });
+    });
+}
+
 fn apply(actions: Vec<Action>, session: &mut Session, device: &Device, tx: &Sender<Event>) {
     for action in actions {
         match action {
@@ -225,12 +235,16 @@ fn apply(actions: Vec<Action>, session: &mut Session, device: &Device, tx: &Send
                     send(out, &bytes, &device.name);
                 }
             }
-            Action::Run { control, job, exec } => {
-                let tx = tx.clone();
-                exec::spawn(job, exec, move |outcome| {
-                    let _ = tx.send(Event::Done { control, job, outcome });
-                });
-            }
+            Action::Run { control, job, exec } => spawn_run(control, job, exec, tx),
+        }
+    }
+}
+
+/// Like [`apply`], for when there's no connection: runs commands, drops MIDI.
+fn run_commands(actions: Vec<Action>, tx: &Sender<Event>) {
+    for action in actions {
+        if let Action::Run { control, job, exec } = action {
+            spawn_run(control, job, exec, tx);
         }
     }
 }
