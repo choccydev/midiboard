@@ -31,9 +31,9 @@ fn read_user_config_paths() {
 fn generate_config() {}
 
 fn config_from_str(config_str: &str) -> types::ConfigFile {
-    let mut config_asset: config::Config = config::Config::default();
-    config_asset
-        .merge(config::File::from_str(config_str, config::FileFormat::Json))
+    let config_asset = config::Config::builder()
+        .add_source(config::File::from_str(config_str, config::FileFormat::Json))
+        .build()
         .unwrap();
 
     config_asset.try_deserialize::<types::ConfigFile>().unwrap()
