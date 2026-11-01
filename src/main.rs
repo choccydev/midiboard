@@ -98,6 +98,12 @@ enum Cmd {
         bytes: String,
     },
 
+    /// Arturia BeatStep tools: read its setup, or switch encoders to relative mode.
+    Beatstep {
+        #[command(subcommand)]
+        action: BeatstepCmd,
+    },
+
     /// Set one LED on an Arturia BeatStep.
     Led {
         /// Output port of the BeatStep.
@@ -111,6 +117,42 @@ enum Cmd {
         /// off, red, blue or magenta.
         #[arg(long, default_value = "red")]
         color: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum BeatstepCmd {
+    /// Print how each encoder and pad is set up, in config terms.
+    Show {
+        /// Port of the BeatStep.
+        device: String,
+    },
+    /// Switch encoders to a relative (endless) or absolute mode over SysEx.
+    ///
+    /// Only the behavior changes; channels and CC numbers stay as they are.
+    /// The change applies to the device's current settings; store it to a
+    /// preset to keep it after a power cycle.
+    Setup {
+        /// Port of the BeatStep.
+        device: String,
+        /// absolute, relative1, relative2 or relative3.
+        #[arg(long, default_value = "relative1")]
+        mode: String,
+        /// Encoders to change: `all`, or a list like `1,2,5-8`.
+        #[arg(long, default_value = "all")]
+        encoders: String,
+        /// Leave the big volume knob alone.
+        #[arg(long)]
+        no_volume: bool,
+        /// Global knob acceleration: slow, medium or fast.
+        #[arg(long)]
+        acceleration: Option<String>,
+        /// Put these pads in gate mode (`all`, or a list like `1-4`).
+        #[arg(long, value_name = "PADS")]
+        gate_pads: Option<String>,
+        /// Print the SysEx messages instead of sending them.
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -194,6 +236,20 @@ fn real_main() -> Result<()> {
         }
         Cmd::Send { device, bytes } => devices::send(&device, &bytes),
         Cmd::Led { device, pad, button, color } => devices::led(&device, pad, button, &color),
+        Cmd::Beatstep { action } => match action {
+            BeatstepCmd::Show { device } => devices::beatstep_show(&device),
+            BeatstepCmd::Setup { device, mode, encoders, no_volume, acceleration, gate_pads, dry_run } => {
+                let err = anyhow::Error::msg;
+                let setup = devices::BeatstepSetup {
+                    encoders: beatstep::parse_selection(&encoders, 16).map_err(err)?,
+                    volume: !no_volume,
+                    behavior: beatstep::encoder_behavior(&mode).map_err(err)?,
+                    acceleration,
+                    gate_pads: gate_pads.map(|p| beatstep::parse_selection(&p, 16)).transpose().map_err(err)?,
+                };
+                devices::beatstep_setup(&device, &setup, dry_run)
+            }
+        },
     }
 }
 

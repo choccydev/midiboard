@@ -17,14 +17,15 @@ RUST_LOG=debug) to override.
 Usage: midiboard <COMMAND>
 
 Commands:
-  run      Run the service: listen to the configured devices and run commands
-  devices  List MIDI input and output ports [alias: list]
-  listen   Print every message a device sends, decoded as `type`, `channel` and `key`
-  config   Create or check the config file
-  replay   Run a recorded trace through the engine and print what would execute
-  send     Send raw MIDI bytes to an output port, e.g. "90 24 7F" or a SysEx
-  led      Set one LED on an Arturia BeatStep
-  help     Print this message or the help of the given subcommand(s)
+  run       Run the service: listen to the configured devices and run commands
+  devices   List MIDI input and output ports [alias: list]
+  listen    Print every message a device sends, decoded as `type`, `channel` and `key`
+  config    Create or check the config file
+  replay    Run a recorded trace through the engine and print what would execute
+  send      Send raw MIDI bytes to an output port, e.g. "90 24 7F" or a SysEx
+  beatstep  Arturia BeatStep tools: read its setup, or switch encoders to relative mode
+  led       Set one LED on an Arturia BeatStep
+  help      Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help
@@ -196,6 +197,80 @@ Arguments:
 Options:
   -h, --help
           Print help
+```
+
+## midiboard beatstep
+
+```text
+Arturia BeatStep tools: read its setup, or switch encoders to relative mode
+
+Usage: midiboard beatstep <COMMAND>
+
+Commands:
+  show   Print how each encoder and pad is set up, in config terms
+  setup  Switch encoders to a relative (endless) or absolute mode over SysEx
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help
+          Print help
+```
+
+## midiboard beatstep show
+
+```text
+Print how each encoder and pad is set up, in config terms
+
+Usage: midiboard beatstep show <DEVICE>
+
+Arguments:
+  <DEVICE>
+          Port of the BeatStep
+
+Options:
+  -h, --help
+          Print help
+```
+
+## midiboard beatstep setup
+
+```text
+Switch encoders to a relative (endless) or absolute mode over SysEx.
+
+Only the behavior changes; channels and CC numbers stay as they are. The change applies to the
+device's current settings; store it to a preset to keep it after a power cycle.
+
+Usage: midiboard beatstep setup [OPTIONS] <DEVICE>
+
+Arguments:
+  <DEVICE>
+          Port of the BeatStep
+
+Options:
+      --mode <MODE>
+          absolute, relative1, relative2 or relative3
+          
+          [default: relative1]
+
+      --encoders <ENCODERS>
+          Encoders to change: `all`, or a list like `1,2,5-8`
+          
+          [default: all]
+
+      --no-volume
+          Leave the big volume knob alone
+
+      --acceleration <ACCELERATION>
+          Global knob acceleration: slow, medium or fast
+
+      --gate-pads <PADS>
+          Put these pads in gate mode (`all`, or a list like `1-4`)
+
+      --dry-run
+          Print the SysEx messages instead of sending them
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
 ## midiboard led

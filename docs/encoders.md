@@ -47,7 +47,8 @@ editor, or turn the knob with `midiboard listen` and see what it sends:
 | `relative_offset16` | 17, 18, ... | 15, 14, ... | BeatStep **Relative #3** |
 
 If turning right makes the value go down, or one tick jumps by ~60, the mode is
-wrong.
+wrong. On a BeatStep, `midiboard beatstep show` prints each knob's mode and
+`midiboard beatstep setup` changes it (see [feedback](feedback.md#setting-up-the-beatstep)).
 
 **Acceleration** (relative modes only) makes fast turns cover more ground while
 slow turns stay precise:

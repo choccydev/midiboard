@@ -80,10 +80,37 @@ Either set the pads you use for feedback to Gate in MIDI Control Center, or set
 have `led` feedback. That change lasts until the device is power-cycled or a
 preset is recalled.
 
-**Encoders.** The 16 knobs and the big volume knob are endless. In MIDI Control
-Center, set the ones you use with midiboard to **Relative #1** and use
-`"mode": "relative_offset64"`. Absolute mode works too, but the knobs then stop
-at 0 and 127.
+**Encoders.** The 16 knobs and the big volume knob are endless. Switch them to
+**Relative #1** and use `"mode": "relative_offset64"`. Absolute mode works too,
+but the knobs then stop at 0 and 127. You can do it in MIDI Control Center, or
+with midiboard:
+
+```bash
+midiboard beatstep setup "Arturia BeatStep"                       # all encoders + volume knob -> relative1
+midiboard beatstep setup "Arturia BeatStep" --encoders 1-4 --no-volume --mode relative2
+midiboard beatstep setup "Arturia BeatStep" --acceleration medium --gate-pads 1-8
+midiboard beatstep setup "Arturia BeatStep" --dry-run             # print the SysEx instead of sending it
+```
+
+Only the behavior changes; channels and CC numbers stay as they are. Like
+`take_over_pads`, this changes the device's current settings. To keep it after
+a power cycle, store it to a preset (on the device, or in MIDI Control Center).
+
+**Read the current setup** to fill in the config:
+
+```console
+$ midiboard beatstep show "Arturia BeatStep"
+Encoders:
+       1: "type": "cc", "key": 10, "channel": 1, relative1 -> "mode": "relative_offset64"
+       ...
+  volume: "type": "cc", "key": 7, "channel": 1, relative1 -> "mode": "relative_offset64"
+
+Pads:
+       1: "type": "note", "key": 44, "channel": 1, gate
+       ...
+```
+
+Close MIDI Control Center first; it can hold the port.
 
 **Check the LEDs by hand** before writing the config:
 
@@ -100,21 +127,36 @@ community has reverse-engineered:
 
 ```text
 set parameter: F0 00 20 6B 7F 42 02 00 <param> <control> <value> F7
+get parameter: F0 00 20 6B 7F 42 01 00 <param> <control> F7   (reply has the set form)
 LED color:     param 0x10, pads 1-16 = controls 0x70-0x7F, buttons 0x58-0x5F
-pad behavior:  param 0x06, value 0x00 toggle, 0x01 gate
+mode:          param 0x01 (encoders: 1 = CC; pads: 9 = note, 8 = CC switch)
+channel, num:  param 0x02 (channel - 1), param 0x03 (CC or note number)
+behavior:      param 0x06 (encoders 0x20-0x2F, volume 0x30: 0 absolute, 1-3 relative #1-#3;
+                           pads: 0 toggle, 1 gate)
+acceleration:  param 0x41, control 0x04 (0 slow, 1 medium, 2 fast)
 ```
 
-Sources: [konsumer/beatstep](https://github.com/konsumer/beatstep) and the
-[discussion in its issue #4](https://github.com/konsumer/beatstep/issues/4).
+Sources: [konsumer/beatstep](https://github.com/konsumer/beatstep), the
+[discussion in its issue #4](https://github.com/konsumer/beatstep/issues/4), and
+[untergeek.de's SysEx notes](https://www.untergeek.de/2014/11/taming-arturias-beatstep-sysex-codes-for-programming-via-ipad/).
 If something doesn't light up, `midiboard send` lets you try raw messages:
 
 ```bash
 midiboard send "Arturia BeatStep" "F0 00 20 6B 7F 42 02 00 10 70 01 F7"
 ```
 
-If SysEx doesn't work on your unit, use the `note` target instead: in Control
-mode, the BeatStep lights a pad when it receives a note on for that pad's note,
-and turns it off on note off.
+If SysEx doesn't work on your unit, set `"led_mode": "note"` on the output:
+
+```json
+"output": { "profile": "beatstep", "led_mode": "note" }
+```
+
+`led` feedback is then sent as a note on (lit) or note off (`off` color) to the
+note the control itself is bound to, which the BeatStep shows in Control mode.
+Colors are ignored this way (the original BeatStep lights pads red in Control
+mode), and controls with `led` feedback must be `"type": "note"`. midiboard
+can't tell whether the device accepted a SysEx message, so it doesn't fall back
+on its own.
 
 ## Other controllers
 

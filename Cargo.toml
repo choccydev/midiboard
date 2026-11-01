@@ -11,7 +11,7 @@ documentation = "https://github.com/choccydev/midiboard/tree/master/docs"
 readme = "README.md"
 keywords = ["midi", "controller", "automation", "cli"]
 categories = ["command-line-utilities", "multimedia::audio"]
-exclude = ["PLAN.md", ".github/"]
+exclude = [".github/"]
 
 [dependencies]
 anyhow = "1"

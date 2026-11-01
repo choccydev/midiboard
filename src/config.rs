@@ -83,6 +83,18 @@ pub struct OutputConfig {
     /// so the device stops driving those LEDs itself.
     #[serde(default)]
     pub take_over_pads: bool,
+    /// How `led` feedback is sent: profile SysEx (default), or note on/off
+    /// to the note the control itself is bound to.
+    #[serde(default)]
+    pub led_mode: LedMode,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LedMode {
+    #[default]
+    Sysex,
+    Note,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -545,6 +557,8 @@ fn compile_feedback(
     fb: &FeedbackConfig,
     behavior: &Behavior,
     profile: Option<Profile>,
+    led_mode: LedMode,
+    binding: Binding,
     at: &str,
     errs: &mut Errors,
 ) -> Option<Feedback> {
@@ -597,6 +611,10 @@ fn compile_feedback(
                 return None;
             }
         };
+        if led_mode == LedMode::Note && binding.msg_type != MsgType::Note {
+            errs.push(at, "with `\"led_mode\": \"note\"`, the LED is lit with the control's own note, so the control must be `\"type\": \"note\"`");
+            return None;
+        }
         let mut color = |v: &Option<FbValue>, default: &str, field: &str| -> Option<Vec<u8>> {
             let name = match v {
                 None => default.to_string(),
@@ -607,6 +625,12 @@ fn compile_feedback(
                 }
             };
             match beatstep::color(&name) {
+                Ok(c) if led_mode == LedMode::Note => {
+                    // Control mode lights the pad on note on and clears it on
+                    // note off; there's no color choice this way.
+                    let t = MidiTarget { number: binding.number, channel: binding.channel.unwrap_or(1) };
+                    Some(if c == 0 { note_msg(false, &t, 0) } else { note_msg(true, &t, 127) })
+                }
                 Ok(c) => Some(beatstep::led_message(id, c)),
                 Err(e) => {
                     errs.push(at, format!("`{field}`: {e}"));
@@ -663,6 +687,7 @@ fn compile_control(
     name: &str,
     c: &ControlConfig,
     profile: Option<Profile>,
+    led_mode: LedMode,
     at: &str,
     errs: &mut Errors,
 ) -> Option<Control> {
@@ -760,7 +785,9 @@ fn compile_control(
         }
     };
 
-    let feedback = c.feedback.as_ref().and_then(|f| compile_feedback(f, &behavior, profile, at, errs));
+    let binding = Binding { msg_type: c.msg_type, number: c.key, channel: c.channel };
+    let feedback =
+        c.feedback.as_ref().and_then(|f| compile_feedback(f, &behavior, profile, led_mode, binding, at, errs));
 
     let state = c.state.as_ref().map(|s| {
         let sat = &format!("{at}.state");
@@ -784,13 +811,7 @@ fn compile_control(
         StateSource { exec, pattern, poll: s.poll_ms.map(Duration::from_millis) }
     });
 
-    Some(Control {
-        name: name.to_string(),
-        binding: Binding { msg_type: c.msg_type, number: c.key, channel: c.channel },
-        behavior,
-        feedback,
-        state,
-    })
+    Some(Control { name: name.to_string(), binding, behavior, feedback, state })
 }
 
 /// Validates the whole file and compiles it. On failure, returns every
@@ -810,10 +831,11 @@ pub fn compile(file: &ConfigFile) -> Result<Vec<Device>, Vec<String>> {
             errs.push(&at, "at least one control is required");
         }
         let profile = d.output.as_ref().and_then(|o| o.profile);
+        let led_mode = d.output.as_ref().map(|o| o.led_mode).unwrap_or_default();
         let mut controls: Vec<Control> = Vec::new();
         for (name, c) in &d.controls {
             let cat = format!("{at}.controls.{name}");
-            if let Some(ctrl) = compile_control(name, c, profile, &cat, &mut errs) {
+            if let Some(ctrl) = compile_control(name, c, profile, led_mode, &cat, &mut errs) {
                 if let Some(other) = controls.iter().find(|o| o.binding.overlaps(&ctrl.binding)) {
                     errs.push(&cat, format!("binds the same MIDI input as `{}`", other.name));
                 }
@@ -965,6 +987,20 @@ mod tests {
                 error: Some(vec![0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x10, 0x72, 0x11, 0xF7]),
             }
         );
+    }
+
+    #[test]
+    fn led_mode_note_uses_the_controls_own_note() {
+        let s = r#"{"config_version":2,"devices":[{"name":"x","output":{"profile":"beatstep","led_mode":"note"},"controls":{
+            "m":{"key":44,"type":"note","channel":2,"command":{"kind":"Switch","initial_state":"off","on":{"cmd":"a"},"off":{"cmd":"b"}},
+                 "feedback":{"led":{"pad":9},"on":"red","off":"off"}}}}]}"#;
+        let dev = &compile_str(s).unwrap()[0];
+        let fb = dev.controls[0].feedback.as_ref().unwrap();
+        assert_eq!(fb.target, FbTarget::Messages { on: vec![0x91, 44, 127], off: vec![0x81, 44, 0], error: None });
+
+        let s = r#"{"config_version":2,"devices":[{"name":"x","output":{"profile":"beatstep","led_mode":"note"},"controls":{
+            "m":{"key":44,"type":"cc","command":{"kind":"Trigger","execute":{"cmd":"a"}},"feedback":{"led":{"pad":9}}}}}]}"#;
+        assert!(compile_str(s).unwrap_err()[0].contains("must be `\"type\": \"note\"`"));
     }
 
     #[test]

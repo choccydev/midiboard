@@ -71,6 +71,7 @@ then repaints all LEDs.
 |---|---|---|
 | `port` | the device `name` | Output port for feedback. Same matching rules as `name`. |
 | `profile` | none | Device profile, needed for `led` feedback. Currently `beatstep`. |
+| `led_mode` | `sysex` | How `led` feedback is sent: `sysex` (profile messages, with colors) or `note` (note on/off to the control's own note, no colors). See [feedback](feedback.md#arturia-beatstep). |
 | `take_over_pads` | `false` | BeatStep only. On connect, puts every pad that has `led` feedback in gate mode, so the BeatStep stops lighting those pads by itself. This changes the device's current settings until you power-cycle it or recall a preset. |
 
 You can leave `output` out: if any control has feedback, the output port with

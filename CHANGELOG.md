@@ -16,7 +16,7 @@ A rewrite of the runtime. **The config format changed**; see the
   became `{value}` and `{delta}` placeholders.
 - The default config location is now `~/.config/midiboard/config.json`.
 - The CLI uses subcommands: `devices`, `listen`, `config generate`,
-  `config validate`, `run`, `replay`, `send`, `led`.
+  `config validate`, `run`, `replay`, `send`, `led`, `beatstep`.
 - The systemd system unit was replaced by a user unit, and a launchd agent was
   added for macOS.
 
@@ -26,7 +26,11 @@ A rewrite of the runtime. **The config format changed**; see the
   and decimal precision.
 - LED and MIDI feedback: `led` (device profile), `note`, `cc` and raw `sysex`
   targets, trigger flashes, "lit while running", and error colors.
-- Arturia BeatStep profile for pad and button LEDs, with optional pad takeover.
+- Arturia BeatStep profile for pad and button LEDs, with optional pad takeover
+  and a note on/off mode (`led_mode`) for units where SysEx doesn't work.
+- `beatstep setup` switches BeatStep encoders to relative (or absolute) mode,
+  and sets knob acceleration and pad gate mode; `beatstep show` prints the
+  current setup in config terms.
 - External state sync: switches follow a state command, and encoders start from
   and follow the system value.
 - `channel` matching, `shell` mode with safely quoted placeholders, and command

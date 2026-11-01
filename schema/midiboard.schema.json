@@ -53,6 +53,14 @@
                 "type": "boolean",
                 "default": false,
                 "description": "BeatStep: put pads with LED feedback in gate mode on connect, so the device stops driving those LEDs."
+              },
+              "led_mode": {
+                "enum": [
+                  "sysex",
+                  "note"
+                ],
+                "default": "sysex",
+                "description": "How `led` feedback is sent: profile SysEx with colors (default), or note on/off to the control's own note (BeatStep Control mode, no colors). With `note`, controls with `led` feedback must be `type: note`."
               }
             },
             "additionalProperties": false
