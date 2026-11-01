@@ -103,6 +103,12 @@ target can't keep up. Values between 20 and 60 work well for audio volume.
 
   `pactl` reads `+3%`/`-1%` as relative changes.
 
+  When the command uses `{delta}` and not `{value}` (and has no `wrap` or
+  feedback), the position isn't clamped to `map_min..map_max`: it's just a
+  running total, so turning down from the start still sends `-1`, `-2`, ...
+  With `wrap`, `{delta}` takes the short way round (99 to 0 on a 0-100 range
+  is `+1`).
+
 ## Starting value and external changes
 
 The value starts at `initial` (default `map_min`). With relative encoders it's

@@ -53,7 +53,9 @@ A rewrite of the runtime. **The config format changed**; see the
 - Encoder mapping ignored `map_min`.
 - Encoders lagged by up to the activation window, moved in coarse steps, and
   lost the final value when you stopped turning.
-- A slow command blocked all MIDI input.
+- A slow command blocked all MIDI input. Commands that start something in the
+  background (`app &`, `xdg-open`) don't keep the control busy, and a timeout
+  stops the command's whole process group.
 - `devices --input` leaked memory on every message.
 - Non-UTF-8 command output was dropped with an error.
 - Invalid configs (missing mapping, duplicate keys) only failed at runtime;

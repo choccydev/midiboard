@@ -126,7 +126,15 @@ All three kinds run commands described by the same object:
 
 Placeholders in `cmd` and `args` are replaced before running. With
 `shell: true` the replacement is single-quoted, so a value can never inject
-shell syntax.
+shell syntax. Don't put placeholders inside quotes yourself in shell mode:
+`notify-send "Volume {value}"` would print the quotes. Write
+`notify-send Volume\ {value}` or `notify-send "Volume "{value}` instead.
+
+Commands have no timeout unless you set `timeout_ms`. A command that hangs
+(for example `osascript` waiting on a permission prompt) keeps its control busy
+until it exits, so set a timeout on anything that might hang. Commands that
+start something in the background (`app &`, `xdg-open`) are fine: midiboard
+stops waiting shortly after the command itself exits.
 
 | Placeholder | Available in | Value |
 |---|---|---|

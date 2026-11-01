@@ -2,21 +2,47 @@
 
 use crate::engine::{Job, Outcome, Rendered};
 use std::io::Read;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
+/// How long to wait for output after the command itself has exited. A
+/// process it started in the background can keep the pipes open long after;
+/// we stop waiting for it rather than keeping the control busy.
+const OUTPUT_GRACE: Duration = Duration::from_millis(200);
+
+#[cfg(unix)]
+fn kill_group(child: &mut Child) {
+    // The child leads its own process group (see `process_group(0)` below),
+    // so this also stops anything it started, e.g. under `sh -c "a; b"`.
+    if let Ok(pid) = i32::try_from(child.id()) {
+        // SAFETY: kill(2) with a negative pid signals that process group; it
+        // has no memory-safety requirements.
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+    }
+    let _ = child.kill();
+}
+
+#[cfg(not(unix))]
+fn kill_group(child: &mut Child) {
+    let _ = child.kill();
+}
+
 /// Runs a command to completion (or until its timeout) and logs its output.
 pub fn run(job: Job, exec: &Rendered) -> Outcome {
     debug!(control = %exec.control, program = %exec.program, args = ?exec.args, "running");
-    let child = Command::new(&exec.program)
-        .args(&exec.args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn();
-    let mut child = match child {
+    let mut cmd = Command::new(&exec.program);
+    cmd.args(&exec.args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
             warn!(control = %exec.control, program = %exec.program, "could not start command: {e}");
@@ -25,21 +51,24 @@ pub fn run(job: Job, exec: &Rendered) -> Outcome {
     };
 
     // Read both pipes on their own threads so a chatty command can't fill a
-    // pipe buffer and deadlock while we wait for it.
-    let reader = |pipe: Option<Box<dyn Read + Send>>| {
+    // pipe buffer and deadlock while we wait for it. Results come back over a
+    // channel so we can stop waiting for them.
+    let (tx, rx) = crossbeam_channel::bounded::<(bool, String)>(2);
+    let reader = |is_err: bool, pipe: Option<Box<dyn Read + Send>>| {
+        let tx = tx.clone();
         thread::spawn(move || {
             let mut buf = Vec::new();
             if let Some(mut p) = pipe {
                 let _ = p.read_to_end(&mut buf);
             }
-            String::from_utf8_lossy(&buf).into_owned()
-        })
+            let _ = tx.send((is_err, String::from_utf8_lossy(&buf).into_owned()));
+        });
     };
-    let out = reader(child.stdout.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
-    let err = reader(child.stderr.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+    reader(false, child.stdout.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+    reader(true, child.stderr.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+    drop(tx);
 
     let started = Instant::now();
-    let mut timed_out = false;
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break Some(status),
@@ -51,20 +80,25 @@ pub fn run(job: Job, exec: &Rendered) -> Outcome {
         }
         if exec.timeout.is_some_and(|t| started.elapsed() >= t) {
             warn!(control = %exec.control, program = %exec.program, "command timed out; killing it");
-            let _ = child.kill();
+            kill_group(&mut child);
             let _ = child.wait();
-            timed_out = true;
-            break None;
+            return Outcome { success: false, stdout: String::new() };
         }
         thread::sleep(Duration::from_millis(5));
     };
-    if timed_out {
-        // A grandchild (e.g. under `sh -c`) may still hold the pipes open;
-        // don't block on the readers, they finish when it exits.
-        return Outcome { success: false, stdout: String::new() };
+
+    let (mut stdout, mut stderr) = (String::new(), String::new());
+    let deadline = Instant::now() + OUTPUT_GRACE;
+    for _ in 0..2 {
+        match rx.recv_deadline(deadline) {
+            Ok((false, s)) => stdout = s,
+            Ok((true, s)) => stderr = s,
+            Err(_) => {
+                debug!(control = %exec.control, "output still open after exit (background process?); not waiting");
+                break;
+            }
+        }
     }
-    let stdout = out.join().unwrap_or_default();
-    let stderr = err.join().unwrap_or_default();
 
     let success = status.is_some_and(|s| s.success());
     let quiet = job == Job::State;
@@ -94,14 +128,25 @@ pub fn run(job: Job, exec: &Rendered) -> Outcome {
 ///
 /// The engine allows at most one command and one state read per control at
 /// a time, so the number of threads is bounded by the number of controls.
+/// `done` is always called, even if the thread can't be started.
 pub fn spawn<F>(job: Job, exec: Rendered, done: F)
 where
     F: FnOnce(Outcome) + Send + 'static,
 {
+    let done = Arc::new(Mutex::new(Some(done)));
+    let in_thread = Arc::clone(&done);
     let name = format!("exec:{}", exec.control);
-    let res = thread::Builder::new().name(name).spawn(move || done(run(job, &exec)));
+    let res = thread::Builder::new().name(name).spawn(move || {
+        let outcome = run(job, &exec);
+        if let Some(f) = in_thread.lock().ok().and_then(|mut g| g.take()) {
+            f(outcome);
+        }
+    });
     if let Err(e) = res {
         warn!("could not start a command thread: {e}");
+        if let Some(f) = done.lock().ok().and_then(|mut g| g.take()) {
+            f(Outcome { success: false, stdout: String::new() });
+        }
     }
 }
 
@@ -126,6 +171,26 @@ mod tests {
         assert!(o.stdout.starts_with("hello"), "non-UTF-8 output is kept lossily");
         assert!(!run(Job::Command, &r("false", &[], None)).success);
         assert!(!run(Job::Command, &r("/nonexistent/program", &[], None)).success);
+    }
+
+    #[test]
+    fn background_processes_dont_hold_the_command() {
+        // Found in review: `sh -c "sleep 3 &"` kept the control busy for 3s.
+        let started = Instant::now();
+        let o = run(Job::Command, &r("sh", &["-c", "sleep 3 &"], Some(500)));
+        assert!(o.success);
+        assert!(started.elapsed() < Duration::from_secs(1), "took {:?}", started.elapsed());
+    }
+
+    #[test]
+    fn timeout_kills_the_whole_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("marker");
+        let script = format!("sleep 1; touch {}", marker.display());
+        let o = run(Job::Command, &r("sh", &["-c", &script], Some(100)));
+        assert!(!o.success);
+        thread::sleep(Duration::from_millis(1500));
+        assert!(!marker.exists(), "the grandchild survived the timeout");
     }
 
     #[test]

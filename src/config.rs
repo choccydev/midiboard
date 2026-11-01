@@ -309,7 +309,8 @@ pub struct SysexTarget {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum FbValue {
-    Raw(u8),
+    // u64 so out-of-range numbers reach our range check and get a clear error.
+    Raw(u64),
     Name(String),
 }
 
@@ -401,6 +402,10 @@ pub struct EncoderSpec {
     pub deadband: u8,
     pub initial: f64,
     pub precision: u8,
+    /// The command only uses `{delta}`, so the position is a running total
+    /// and isn't clamped to the range: turning down from the start still
+    /// produces negative deltas.
+    pub unbounded: bool,
     pub exec: Exec,
 }
 
@@ -527,6 +532,9 @@ fn compile_exec(e: &ExecConfig, at: &str, errs: &mut Errors) -> Exec {
     if e.cmd.trim().is_empty() {
         errs.push(at, "`cmd` must not be empty");
     }
+    if e.timeout_ms == Some(0) {
+        errs.push(at, "`timeout_ms` must be at least 1");
+    }
     if e.shell && !e.args.is_empty() {
         errs.push(at, "with `shell: true`, put the whole command line in `cmd` and leave `args` empty");
     }
@@ -534,14 +542,16 @@ fn compile_exec(e: &ExecConfig, at: &str, errs: &mut Errors) -> Exec {
 }
 
 fn note_msg(on: bool, t: &MidiTarget, velocity: u8) -> Vec<u8> {
-    let ch = t.channel - 1;
+    // Out-of-range channels are reported by validation; clamp so building
+    // the message can't underflow while we collect the other errors.
+    let ch = t.channel.clamp(1, 16) - 1;
     if on || velocity > 0 { vec![0x90 | ch, t.number, velocity] } else { vec![0x80 | ch, t.number, 0] }
 }
 
 fn raw_value(v: &Option<FbValue>, default: u8, field: &str, at: &str, errs: &mut Errors) -> u8 {
     match v {
         None => default,
-        Some(FbValue::Raw(n)) if *n < 128 => *n,
+        Some(FbValue::Raw(n)) if *n < 128 => *n as u8,
         Some(FbValue::Raw(n)) => {
             errs.push(at, format!("`{field}` must be 0..=127, got {n}"));
             default
@@ -573,6 +583,9 @@ fn compile_feedback(
     let is_trigger = matches!(behavior, Behavior::Trigger(_));
     if (fb.flash_ms.is_some() || fb.while_running) && !is_trigger {
         errs.push(at, "`flash_ms` and `while_running` only apply to Trigger controls");
+    }
+    if fb.flash_ms == Some(0) {
+        errs.push(at, "`flash_ms` must be at least 1");
     }
     if fb.flash_ms.is_some() && fb.while_running {
         errs.push(at, "use either `flash_ms` or `while_running`, not both");
@@ -628,7 +641,7 @@ fn compile_feedback(
                 Ok(c) if led_mode == LedMode::Note => {
                     // Control mode lights the pad on note on and clears it on
                     // note off; there's no color choice this way.
-                    let t = MidiTarget { number: binding.number, channel: binding.channel.unwrap_or(1) };
+                    let t = MidiTarget { number: binding.number & 0x7F, channel: binding.channel.unwrap_or(1) };
                     Some(if c == 0 { note_msg(false, &t, 0) } else { note_msg(true, &t, 127) })
                 }
                 Ok(c) => Some(beatstep::led_message(id, c)),
@@ -747,6 +760,8 @@ fn compile_control(
                 errs.push(at, "`initial` must lie between `map_min` and `map_max`");
             }
             let exec = compile_exec(&e.execute, &format!("{at}.execute"), errs);
+            let uses = |token: &str| exec.cmd.contains(token) || exec.args.iter().any(|a| a.contains(token));
+            let unbounded = uses("{delta}") && !uses("{value}") && !e.wrap && c.feedback.is_none();
             Behavior::Encoder(EncoderSpec {
                 mode: e.mode,
                 min: e.map_min,
@@ -758,6 +773,7 @@ fn compile_control(
                 deadband: e.deadband,
                 initial,
                 precision: e.precision,
+                unbounded,
                 exec,
             })
         }
@@ -824,6 +840,10 @@ pub fn compile(file: &ConfigFile) -> Result<Vec<Device>, Vec<String>> {
     let mut devices = Vec::new();
     for (i, d) in file.devices.iter().enumerate() {
         let at = format!("devices[{i}]");
+        let norm = |n: &str| n.chars().filter(|c| !c.is_whitespace()).flat_map(char::to_lowercase).collect::<String>();
+        if let Some(j) = file.devices[..i].iter().position(|o| norm(&o.name) == norm(&d.name)) {
+            errs.push(&at, format!("same device as devices[{j}]; put all its controls in one entry"));
+        }
         if d.name.trim().is_empty() {
             errs.push(&at, "`name` must not be empty");
         }
@@ -923,6 +943,18 @@ mod tests {
         // And the schema rejects what the loader rejects.
         let old: serde_json::Value = serde_json::from_str(r#"{"log_level":"Warn","config":[]}"#).unwrap();
         assert!(!validator.is_valid(&old));
+        let wrap = |command: &str| -> serde_json::Value {
+            serde_json::from_str(&format!(
+                r#"{{"config_version":2,"devices":[{{"name":"x","controls":{{"a":{{"key":1,"type":"note","command":{command}}}}}}}]}}"#
+            ))
+            .unwrap()
+        };
+        let shell_args = wrap(r#"{"kind":"Trigger","execute":{"cmd":"a","shell":true,"args":["b"]}}"#);
+        assert!(!validator.is_valid(&shell_args), "shell + args must be rejected like the loader does");
+        let blank = wrap(r#"{"kind":"Trigger","execute":{"cmd":"  "}}"#);
+        assert!(!validator.is_valid(&blank));
+        let upper = wrap(r#"{"kind":"Switch","initial_state":"ON","on":{"cmd":"a"},"off":{"cmd":"b"}}"#);
+        assert!(validator.is_valid(&upper), "uppercase initial_state is accepted by the loader");
     }
 
     #[test]
@@ -1001,6 +1033,25 @@ mod tests {
         let s = r#"{"config_version":2,"devices":[{"name":"x","output":{"profile":"beatstep","led_mode":"note"},"controls":{
             "m":{"key":44,"type":"cc","command":{"kind":"Trigger","execute":{"cmd":"a"}},"feedback":{"led":{"pad":9}}}}}]}"#;
         assert!(compile_str(s).unwrap_err()[0].contains("must be `\"type\": \"note\"`"));
+    }
+
+    #[test]
+    fn review_validation_gaps() {
+        // Channel 0 used to panic while building the message.
+        let s = r#"{"config_version":2,"devices":[{"name":"x","controls":{
+            "t":{"key":1,"type":"note","command":{"kind":"Trigger","execute":{"cmd":"a","timeout_ms":0}},
+                 "feedback":{"note":{"number":1,"channel":0},"on":300,"flash_ms":0}}}},
+            {"name":"X ","controls":{"u":{"key":2,"type":"note","command":{"kind":"Trigger","execute":{"cmd":"a"}}}}}]}"#;
+        let all = compile_str(s).unwrap_err().join("\n");
+        for want in [
+            "`channel` must be 1..=16",
+            "`timeout_ms` must be at least 1",
+            "`on` must be 0..=127",
+            "`flash_ms` must be at least 1",
+            "same device as devices[0]",
+        ] {
+            assert!(all.contains(want), "missing {want:?} in:\n{all}");
+        }
     }
 
     #[test]

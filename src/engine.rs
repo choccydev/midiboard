@@ -108,8 +108,10 @@ enum Kind {
         target: bool,
         pending_toggle: bool,
     },
+    /// `velocity` is that of the most recent queued press.
     Trigger {
         queued: u8,
+        velocity: u8,
     },
 }
 
@@ -125,6 +127,11 @@ struct Slot {
     next_poll: Option<Time>,
     last_echo: Option<u8>,
     last_state_warn: Option<Time>,
+    /// Bumped whenever something may change the real state (a command
+    /// starts or finishes, the encoder moves). A state read started in an
+    /// older epoch is stale and is discarded.
+    epoch: u64,
+    state_epoch: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -151,7 +158,7 @@ impl Engine {
                 let kind = match &c.behavior {
                     Behavior::Encoder(spec) => Kind::Encoder(EncoderState::new(spec)),
                     Behavior::Switch(spec) => Kind::Switch { on: spec.initial, target: false, pending_toggle: false },
-                    Behavior::Trigger(_) => Kind::Trigger { queued: 0 },
+                    Behavior::Trigger(_) => Kind::Trigger { queued: 0, velocity: 0 },
                 };
                 Slot {
                     ctl: c.clone(),
@@ -164,6 +171,8 @@ impl Engine {
                     next_poll: None,
                     last_echo: None,
                     last_state_warn: None,
+                    epoch: 0,
+                    state_epoch: 0,
                 }
             })
             .collect();
@@ -199,6 +208,17 @@ impl Engine {
             if self.slots[i].ctl.state.is_some() {
                 self.start_state_read(i, now, &mut out);
             }
+        }
+        out
+    }
+
+    /// Re-sends every control's feedback, e.g. when the output port appears
+    /// after the input.
+    pub fn repaint(&mut self) -> Vec<Action> {
+        let mut out = Vec::new();
+        for i in 0..self.slots.len() {
+            self.slots[i].last_echo = None;
+            self.paint(i, &mut out);
         }
         out
     }
@@ -265,6 +285,7 @@ impl Engine {
                 let slot = &mut self.slots[i];
                 if let (Kind::Encoder(st), Behavior::Encoder(spec)) = (&mut slot.kind, &slot.ctl.behavior) {
                     st.input(spec, now, v);
+                    slot.epoch += 1;
                 }
                 // Execution, if due, happens in run_timers.
             }
@@ -305,9 +326,10 @@ impl Engine {
                     self.start_toggle(i, out);
                 }
             }
-            Kind::Trigger { ref mut queued } => {
+            Kind::Trigger { ref mut queued, velocity: ref mut queued_velocity } => {
                 if busy {
                     *queued = (*queued + 1).min(TRIGGER_QUEUE_MAX);
+                    *queued_velocity = velocity;
                 } else {
                     self.start_trigger(i, now, velocity, out);
                 }
@@ -326,6 +348,7 @@ impl Engine {
         let rendered = render_exec(&slot.ctl.name, exec, &[]);
         info!(control = %slot.ctl.name, to = if *target { "on" } else { "off" }, "switch");
         slot.in_flight = true;
+        slot.epoch += 1;
         out.push(Action::Run { control: i, job: Job::Command, exec: rendered });
     }
 
@@ -336,6 +359,7 @@ impl Engine {
         let rendered = render_exec(&slot.ctl.name, &spec.exec, &[("velocity", &v)]);
         info!(control = %slot.ctl.name, "trigger");
         slot.in_flight = true;
+        slot.epoch += 1;
         out.push(Action::Run { control: i, job: Job::Command, exec: rendered });
         if let Some(fb) = &slot.ctl.feedback
             && let FbTarget::Messages { on, .. } = &fb.target
@@ -356,6 +380,7 @@ impl Engine {
             return;
         }
         slot.state_in_flight = true;
+        slot.state_epoch = slot.epoch;
         slot.next_poll = src.poll.map(|p| now + p);
         out.push(Action::Run { control: i, job: Job::State, exec: render_exec(&slot.ctl.name, &src.exec, &[]) });
     }
@@ -372,6 +397,7 @@ impl Engine {
 
     fn on_command_done(&mut self, now: Time, i: usize, outcome: Outcome, out: &mut Vec<Action>) {
         self.slots[i].in_flight = false;
+        self.slots[i].epoch += 1;
         let name = self.slots[i].ctl.name.clone();
         if !outcome.success {
             warn!(control = %name, "command failed");
@@ -404,7 +430,7 @@ impl Engine {
                     self.start_toggle(i, out);
                 }
             }
-            Kind::Trigger { ref mut queued } => {
+            Kind::Trigger { ref mut queued, velocity } => {
                 let again = *queued > 0;
                 if again {
                     *queued -= 1;
@@ -421,7 +447,7 @@ impl Engine {
                     out.push(Action::Send(off.clone()));
                 }
                 if again {
-                    self.start_trigger(i, now, 127, out);
+                    self.start_trigger(i, now, velocity, out);
                 }
             }
             Kind::Encoder(_) => {
@@ -438,6 +464,16 @@ impl Engine {
             slot.next_poll = Some(now + p);
         }
         let name = slot.ctl.name.clone();
+        if slot.state_epoch != slot.epoch {
+            // Started before a command ran or the knob moved: the result may
+            // describe the old state. Switches re-read so the LED is
+            // confirmed; encoders wait for the next poll.
+            debug!(control = %name, "discarding a stale state read");
+            if matches!(slot.kind, Kind::Switch { .. }) && !slot.in_flight {
+                self.start_state_read(i, now, out);
+            }
+            return;
+        }
         let warn_once = |slot: &mut Slot, msg: &str| {
             if slot.last_state_warn.is_none_or(|t| now.saturating_sub(t) >= STATE_WARN_EVERY) {
                 warn!(control = %name, "{msg}");
@@ -505,6 +541,7 @@ impl Engine {
                 let exec = render_exec(&slot.ctl.name, &spec.exec, &[("value", &em.value), ("delta", &em.delta)]);
                 debug!(control = %slot.ctl.name, value = %em.value, delta = %em.delta, "encoder");
                 slot.in_flight = true;
+                slot.epoch += 1;
                 out.push(Action::Run { control: i, job: Job::Command, exec });
                 self.echo(i, out);
             }
@@ -755,6 +792,66 @@ mod tests {
         // A press now goes to "on" based on the synced state.
         let a = e.handle(ms(1100), note_on(5));
         assert_eq!(runs(&a)[0].program, "on");
+    }
+
+    // Regression tests for issues found in adversarial review.
+
+    #[test]
+    fn stale_state_read_does_not_revert_a_switch() {
+        let dev = device(
+            r#""m":{"key":5,"type":"note","command":{"kind":"Switch","on":{"cmd":"on"},"off":{"cmd":"off"}},
+                "state":{"cmd":"probe","match":"yes"},"feedback":{"note":{"number":5}}}"#,
+        );
+        let mut e = Engine::new(&dev);
+        e.startup(ms(0)); // read in flight; it will see the pre-command state
+        e.handle(ms(10), note_on(5));
+        e.handle(ms(20), done(0, true));
+        assert_eq!(e.switch_state(0), Some(true));
+        let a = e.handle(ms(30), state_done(0, "Mute: no"));
+        assert_eq!(e.switch_state(0), Some(true), "stale read must be ignored");
+        assert!(a.iter().any(|x| matches!(x, Action::Run { job: Job::State, .. })), "and re-read to confirm");
+        e.handle(ms(40), state_done(0, "Mute: yes"));
+        assert_eq!(e.switch_state(0), Some(true));
+    }
+
+    #[test]
+    fn stale_state_read_does_not_move_an_encoder_back() {
+        let dev = device(
+            r#""v":{"key":1,"type":"cc","command":{"kind":"Encoder","mode":"relative_offset64","map_max":100,"execute":{"cmd":"set"}},
+                "state":{"cmd":"get","poll_ms":1000}}"#,
+        );
+        let mut e = Engine::new(&dev);
+        e.startup(ms(0));
+        e.handle(ms(0), state_done(0, "50"));
+        e.handle(ms(1000), Input::Tick); // poll starts
+        e.handle(ms(1010), Input::Midi(MidiMsg::ControlChange { channel: 1, controller: 1, value: 74 }));
+        e.handle(ms(1020), done(0, true));
+        assert_eq!(e.position(0), Some(60.0));
+        e.handle(ms(1400), state_done(0, "50")); // sampled at t=1000
+        assert_eq!(e.position(0), Some(60.0));
+    }
+
+    #[test]
+    fn queued_trigger_keeps_its_velocity() {
+        let dev = device(
+            r#""t":{"key":36,"type":"note","command":{"kind":"Trigger","debounce_ms":0,"execute":{"cmd":"echo","args":["{velocity}"]}}}"#,
+        );
+        let mut e = Engine::new(&dev);
+        e.handle(ms(0), Input::Midi(MidiMsg::NoteOn { channel: 1, note: 36, velocity: 10 }));
+        e.handle(ms(5), Input::Midi(MidiMsg::NoteOn { channel: 1, note: 36, velocity: 20 }));
+        let a = e.handle(ms(10), done(0, true));
+        assert_eq!(runs(&a)[0].args, vec!["20"]);
+    }
+
+    #[test]
+    fn delta_commands_can_turn_down_from_the_start() {
+        let dev = device(
+            r#""v":{"key":1,"type":"cc","command":{"kind":"Encoder","mode":"relative_offset64",
+                "execute":{"cmd":"pactl","args":["set-sink-volume","@DEFAULT_SINK@","{delta}%"]}}}"#,
+        );
+        let mut e = Engine::new(&dev);
+        let a = e.handle(ms(0), Input::Midi(MidiMsg::ControlChange { channel: 1, controller: 1, value: 63 }));
+        assert_eq!(runs(&a)[0].args[2], "-1%");
     }
 
     #[test]

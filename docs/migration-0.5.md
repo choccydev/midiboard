@@ -104,6 +104,11 @@ accepts relative values:
 "execute": { "cmd": "pactl", "args": ["set-sink-volume", "@DEFAULT_SINK@", "{delta}%"] }
 ```
 
+With only `{delta}` in the command, the range doesn't limit anything, so this
+works from the first turn in either direction. With a relative encoder you can
+also switch to `{value}` and a `state` source, so the knob follows the real
+volume; see [encoders](encoders.md#starting-value-and-external-changes).
+
 ### Switch
 
 ```diff

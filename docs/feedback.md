@@ -106,9 +106,14 @@ Encoders:
   volume: "type": "cc", "key": 7, "channel": 1, relative1 -> "mode": "relative_offset64"
 
 Pads:
-       1: "type": "note", "key": 44, "channel": 1, gate
+       1: "type": "note", "key": 36, "channel": 1, gate
        ...
 ```
+
+(Illustrative output; your values depend on how the device is set up.) The pad
+number on the left is what `led` feedback uses, and the `key` is what the
+control must bind. The examples in this repo assume pad 1 sends note 36, pad 2
+sends 37, and so on; run `show` and adjust the `key`s to match your unit.
 
 Close MIDI Control Center first; it can hold the port.
 

@@ -788,6 +788,7 @@ dependencies = [
  "ctrlc",
  "home",
  "jsonschema",
+ "libc",
  "midir",
  "regex",
  "serde",

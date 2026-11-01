@@ -132,6 +132,8 @@ impl EncoderState {
             let next = self.pos + f64::from(ticks) * spec.step * Self::gain(spec, dt);
             self.pos = if spec.wrap {
                 spec.min + (next - spec.min).rem_euclid(spec.max - spec.min)
+            } else if spec.unbounded {
+                next
             } else {
                 next.clamp(spec.min, spec.max)
             };
@@ -163,7 +165,16 @@ impl EncoderState {
         if rendered == self.last_exec_rendered {
             return None;
         }
-        let delta = value - self.last_exec_value;
+        let mut delta = value - self.last_exec_value;
+        if spec.wrap {
+            // Report the short way round: 99 -> 0 on a 0..100 range is +1.
+            let range = spec.max - spec.min;
+            if delta > range / 2.0 {
+                delta -= range;
+            } else if delta < -range / 2.0 {
+                delta += range;
+            }
+        }
         let delta_s = render(delta, spec.precision);
         let delta_s = if delta_s.starts_with('-') { delta_s } else { format!("+{delta_s}") };
         self.last_exec_at = Some(now);
@@ -207,6 +218,7 @@ mod tests {
             deadband: 0,
             initial: 0.0,
             precision: 0,
+            unbounded: false,
             exec: Exec { cmd: "true".into(), args: vec![], shell: false, timeout: None },
         }
     }
@@ -304,6 +316,27 @@ mod tests {
         st.input(&s, ms(51), 63);
         assert_eq!(st.take(&s, ms(80)), None);
         assert_eq!(st.deadline(&s), None);
+    }
+
+    #[test]
+    fn wrap_delta_goes_the_short_way() {
+        let mut s = spec(EncoderMode::RelativeOffset64);
+        s.wrap = true;
+        s.initial = 99.0;
+        let mut st = EncoderState::new(&s);
+        st.input(&s, ms(0), 65);
+        assert_eq!(st.take(&s, ms(0)), Some(Emission { value: "0".into(), delta: "+1".into() }));
+        st.input(&s, ms(1), 63);
+        assert_eq!(st.take(&s, ms(40)), Some(Emission { value: "99".into(), delta: "-1".into() }));
+    }
+
+    #[test]
+    fn unbounded_goes_below_the_range() {
+        let mut s = spec(EncoderMode::RelativeOffset64);
+        s.unbounded = true;
+        let mut st = EncoderState::new(&s);
+        st.input(&s, ms(0), 61);
+        assert_eq!(st.take(&s, ms(0)), Some(Emission { value: "-3".into(), delta: "-3".into() }));
     }
 
     #[test]

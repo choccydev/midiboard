@@ -35,6 +35,11 @@ A trigger runs its command on every **press**:
   127 then 0). Buttons that never send 0 work too: a repeat of the same value
   counts as a new press.
 
+Pads set to **toggle** mode on the controller send "on" on one press and "off"
+on the next, so midiboard only sees every other press. Set the pads you bind
+to **gate** (momentary) mode; on a BeatStep, `take_over_pads` or
+`midiboard beatstep setup --gate-pads` does it for you.
+
 Presses closer together than `debounce_ms` (default 50 ms) are ignored, to
 filter contact bounce. If the command is still running when you press again,
 the press is queued (up to 4) and runs as soon as the previous one finishes, so

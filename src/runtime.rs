@@ -99,9 +99,29 @@ pub fn run(devices: Vec<Device>) -> Result<()> {
     if failed { Err(anyhow!("one or more devices stopped with an error")) } else { Ok(()) }
 }
 
+/// Minimum gap between SysEx messages: the BeatStep drops SysEx that
+/// arrives back to back (startup paints and pad takeover send dozens).
+const SYSEX_GAP: Duration = Duration::from_millis(5);
+
 struct Session {
     _input: MidiInputConnection<()>,
     output: Option<MidiOutputConnection>,
+    last_sysex: Option<Instant>,
+}
+
+/// Opens the output port, warning (not failing) when it isn't available, so
+/// the controls still work without feedback.
+fn try_open_output(device: &Device, warn_on_fail: bool) -> Option<MidiOutputConnection> {
+    let port = device.output_port.as_ref()?;
+    match open_output(port, "midiboard") {
+        Ok(out) => Some(out),
+        Err(e) => {
+            if warn_on_fail {
+                warn!(device = %device.name, "feedback disabled, output port unavailable (will keep retrying): {e:#}");
+            }
+            None
+        }
+    }
 }
 
 fn connect(device: &Device, tx: &Sender<Event>) -> Result<Session> {
@@ -114,11 +134,8 @@ fn connect(device: &Device, tx: &Sender<Event>) -> Result<Session> {
             warn!("event queue full; dropping a MIDI message");
         }
     })?;
-    let output = match &device.output_port {
-        Some(port) => Some(open_output(port, "midiboard")?),
-        None => None,
-    };
-    Ok(Session { _input: input, output })
+    let output = try_open_output(device, true);
+    Ok(Session { _input: input, output, last_sysex: None })
 }
 
 fn device_thread(device: Device, tx: Sender<Event>, rx: Receiver<Event>) -> Result<()> {
@@ -163,10 +180,8 @@ fn device_thread(device: Device, tx: Sender<Event>, rx: Receiver<Event>) -> Resu
             }
         };
 
-        if let Some(out) = session.output.as_mut() {
-            for msg in &device.init_messages {
-                send(out, msg, &device.name);
-            }
+        for msg in &device.init_messages {
+            send(&mut session, msg, &device.name);
         }
         let actions = engine.startup(now());
         apply(actions, &mut session, &device, &tx);
@@ -203,6 +218,18 @@ fn device_thread(device: Device, tx: Sender<Event>, rx: Receiver<Event>) -> Resu
                 if midi::select_port(&input_port_names(&watcher), &device.name).is_err() {
                     break true;
                 }
+                if session.output.is_none()
+                    && device.output_port.is_some()
+                    && let Some(out) = try_open_output(&device, false)
+                {
+                    info!(device = %device.name, "output port available; feedback enabled");
+                    session.output = Some(out);
+                    for msg in &device.init_messages {
+                        send(&mut session, msg, &device.name);
+                    }
+                    let actions = engine.repaint();
+                    apply(actions, &mut session, &device, &tx);
+                }
             }
         };
         if lost {
@@ -213,7 +240,14 @@ fn device_thread(device: Device, tx: Sender<Event>, rx: Receiver<Event>) -> Resu
     }
 }
 
-fn send(out: &mut MidiOutputConnection, bytes: &[u8], device: &str) {
+fn send(session: &mut Session, bytes: &[u8], device: &str) {
+    let Some(out) = session.output.as_mut() else { return };
+    if bytes.first() == Some(&0xF0) {
+        if let Some(wait) = session.last_sysex.and_then(|t| (t + SYSEX_GAP).checked_duration_since(Instant::now())) {
+            std::thread::sleep(wait);
+        }
+        session.last_sysex = Some(Instant::now());
+    }
     debug!(device, bytes = %midi::hex(bytes), "send");
     if let Err(e) = out.send(bytes) {
         warn!(device, "could not send MIDI: {e}");
@@ -230,11 +264,7 @@ fn spawn_run(control: usize, job: Job, exec: crate::engine::Rendered, tx: &Sende
 fn apply(actions: Vec<Action>, session: &mut Session, device: &Device, tx: &Sender<Event>) {
     for action in actions {
         match action {
-            Action::Send(bytes) => {
-                if let Some(out) = session.output.as_mut() {
-                    send(out, &bytes, &device.name);
-                }
-            }
+            Action::Send(bytes) => send(session, &bytes, &device.name),
             Action::Run { control, job, exec } => spawn_run(control, job, exec, tx),
         }
     }
