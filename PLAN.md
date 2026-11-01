@@ -7,7 +7,7 @@ Target release: `0.5.0`. This is a breaking config change; old configs are dropp
 
 - **`v0.3.3`** is tagged at `ac0d2da`, the commit crates.io 0.3.3 was published from.
 - **`v0.4.0`** is tagged at the version-bump commit on top of `master`'s `739f1df`. It ships the unreleased Encoder change (`increase`/`decrease` → `execute` + `map_min`/`map_max`/`replace`) as-is.
-- The tags are pushed. **You still need to:** create the GitHub Release pages from the tags (I don't have a release API here), and run `cargo publish` from `v0.4.0` (it needs your crates.io token).
+- **You still need to:** push the two tags (this session can only push its working branch), create the GitHub Release pages from them, and run `cargo publish` from `v0.4.0` (it needs your crates.io token). The bump commit `d7e6e0b` is already on the plan branch.
 - From 0.5.0 on, a release workflow (§2) builds binaries and drafts the GitHub Release when a tag is pushed.
 
 This plan covers five goals:
