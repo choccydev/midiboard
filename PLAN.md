@@ -1,7 +1,14 @@
 # Midiboard modernization plan
 
-Status: **draft for review**. Nothing here is implemented yet.
-Target release: `0.4.0`.
+Status: **decisions resolved (§9), ready to implement**.
+Target release: `0.5.0`. This is a breaking config change; old configs are dropped.
+
+## Releases before the rewrite
+
+- **`v0.3.3`** is tagged at `ac0d2da`, the commit crates.io 0.3.3 was published from.
+- **`v0.4.0`** is tagged at the version-bump commit on top of `master`'s `739f1df`. It ships the unreleased Encoder change (`increase`/`decrease` → `execute` + `map_min`/`map_max`/`replace`) as-is.
+- The tags are pushed. **You still need to:** create the GitHub Release pages from the tags (I don't have a release API here), and run `cargo publish` from `v0.4.0` (it needs your crates.io token).
+- From 0.5.0 on, a release workflow (§2) builds binaries and drafts the GitHub Release when a tag is pushed.
 
 This plan covers five goals:
 
@@ -74,15 +81,26 @@ The `FIXME` blames midir's `alsa_seq()`. Most of the leaking actually comes from
 | `config` | 0.13 | **removed → `serde_json`** | We only read one JSON file, so the layered-config crate is unnecessary weight. Errors now carry line and column numbers. |
 | `colored` | 2 | **3** | |
 | `rust-embed` | 6 | **8** | Or plain `include_str!`, since only the skeleton is embedded. |
-| `chrono` | 0.4.22 | 0.4.45, or removed | Removed if logging moves to `tracing` (decision D1). |
+| `chrono` | 0.4.22 | **removed** | `tracing-subscriber` handles timestamps. |
+| custom `Logger` | — | **`tracing` + `tracing-subscriber`** | Config `log_level` sets the default, `RUST_LOG` overrides it, colored output is kept, and child-process output is logged as structured fields. |
+| new | — | `regex` | For `state` sync matching (§5). |
 | `rand` (dev) | 0.8 | removed | Tests become deterministic. |
 | new | — | `signal-hook` or `ctrlc` | Clean shutdown, so LEDs can be cleared on exit. |
 | new | — | `crossbeam-channel` | Moves events from the callback to the engine and executor. |
 
 Also in this phase:
 
-- **Config location**: `$XDG_CONFIG_HOME/midiboard/config.json` (`~/.config/...`), falling back to the legacy `~/midiboard.json` with a deprecation warning. `--path` keeps working.
-- **systemd**: ship a **user unit** (`~/.config/systemd/user/midiboard.service`, `WantedBy=default.target`) that fixes B9. The system-unit template is removed.
+- **Config format (clean break)**: the file gets a required top-level `"config_version": 2`. Any file without it (every 0.3/0.4 config) is rejected with an error that links the migration guide. There are no deprecated aliases or compatibility code paths.
+- **Config location**: `$XDG_CONFIG_HOME/midiboard/config.json` (`~/.config/midiboard/config.json`) on both Linux and macOS. If a legacy `~/midiboard.json` exists, the error points to the migration guide. `--path` keeps working.
+- **Platforms**: Linux (ALSA) and **macOS on aarch64 (CoreMIDI)**, both through midir.
+  - CI matrix: `ubuntu-latest` (x86_64) and `macos-14` (Apple Silicon), each running fmt, clippy and test.
+  - Platform-specific code stays minimal. ALSA virtual ports are used in tests where available, and CoreMIDI supports virtual ports too.
+  - Port names differ between ALSA (`client:port N:M`) and CoreMIDI (plain names), so the matching in §3 is tested against both formats.
+- **Service files**:
+  - Linux: a systemd **user unit** (`~/.config/systemd/user/midiboard.service`, `WantedBy=default.target`), which fixes B9. The system-unit template is removed.
+  - macOS: a **launchd agent** (`~/Library/LaunchAgents/dev.choccymilk.midiboard.plist`, `KeepAlive`, logs to `~/Library/Logs/midiboard.log`).
+- **Release workflow**: pushing a `v*` tag builds `x86_64-unknown-linux-gnu` and `aarch64-apple-darwin` binaries and drafts a GitHub Release with them attached.
+- **Identity**: the repo URLs, the schema `$id` and the docs move to `choccydev/midiboard`. The author is `Agata Ordano <gh@choccymilk.dev>`.
 
 ## 3. Phase 2: architecture and bug fixes (goal 2)
 
@@ -98,9 +116,11 @@ Restructure the runtime into a pipeline:
 ```
 
 - **`midi.rs`**: a small, hand-written parser that turns raw bytes into `MidiMsg { NoteOn, NoteOff, CC, PolyAT, ChanAT, PitchBend, ProgramChange, SysEx }`. It treats note-on with velocity 0 as note-off and safely ignores realtime and unknown messages. This fixes B5 and B6.
-- **Control matching** becomes `(message type, channel, number)`. The new config fields are backward compatible: `"type": "note" | "cc"` and `"channel": 1-16`, both optional. The defaults reproduce today's "any type, any channel" matching, and `devices --input` shows a warning when that is ambiguous. Duplicate bindings are a validation error (B12).
+- **Control matching** becomes `(message type, channel, number)`. `"type": "note" | "cc"` is **required**. `"channel": 1-16` is optional and defaults to any channel. `devices --input` prints the decoded type, channel and number, so they can be copied straight into the config. Duplicate bindings are a validation error (B12).
 - **Engine**: one thread per device, so all configured devices run (B1). It blocks on the channel, with no spin (B2). A precomputed `HashMap<Binding, ControlId>` is built once, which removes the per-message clones (L2).
 - **Executor**: commands run off the MIDI path (B8) and capture output with lossy UTF-8 (B15). Each control has at most one command in flight.
+  - By default commands are exec'd directly. Setting `"shell": true` runs them through `sh -c` instead (the user's `$SHELL` is not used, for predictability), which allows pipes, `&&` and environment expansion.
+  - Placeholders (`{value}`, `{delta}`) are substituted before the command is exec'd. In shell mode they are shell-quoted to prevent injection.
 - **Trigger** fires on the *press edge* (note-on velocity > 0, or CC crossing above 0). Its only debounce is a minimum interval since the last fire, so no press is swallowed (B3).
 - **Switch** toggles on the press edge, and the first press goes to the opposite of `initial_state` (B4). If the command fails, the switch state stays unchanged (decision D4), so LED feedback never lies.
 - **Mapping**: `min + (max-min) * v/127`, with rounding and clamping (B7).
@@ -159,8 +179,9 @@ The engine decodes every event into a position change and never drops input:
    - **Trailing edge**: when movement stops, the final value is always executed. This guarantees that the end state matches the knob.
    - **Dedupe**: a run is skipped if the rendered integer value equals the last value executed.
    - **Back-pressure**: if the previous command is still running, the newest value waits in a one-slot mailbox. Commands never pile up.
-5. **Delta commands**: `{delta}` is a new placeholder for tools that take relative steps (`pactl ... +{delta}%`). The legacy `replace` + `@TOKEN@` style keeps working.
-6. **Back compatibility**: `thresholds.encoder.activation` maps to `rate_limit_ms`, and `detection` is accepted but ignored, with a deprecation warning.
+5. **Placeholders**: `{value}` is the mapped absolute value, and `{delta}` is the signed change since the last execution, for tools that take relative steps (`pactl ... +{delta}%`). The old `replace` + `@TOKEN@` mechanism is removed.
+6. **Thresholds**: the per-device `thresholds` block and its `detection`/`activation` fields are removed. Encoders use `rate_limit_ms` and `deadband`. Triggers and switches get an optional per-control `debounce_ms`, defaulting to 50.
+7. **Starting point**: if a control has a `state` source (§5), the encoder's internal position starts from the real system value (for example, the current volume) instead of 0. Otherwise it starts at `initial` (default `map_min`).
 
 ### Measuring it ("plot it against sensitive stuff")
 
@@ -225,6 +246,37 @@ From community reverse-engineering. Arturia does not publish this protocol.
 - **Pad behavior conflict**: in *Toggle* mode the BeatStep drives its own LEDs and fights us. The profile can optionally set each fed-back pad to *Gate* on startup (`param 0x06`, value `0x01`). This is opt-in (`"take_over_pads": true`) because it changes the device's stored settings until power cycle or preset recall.
 - Optional helper: `midiboard beatstep setup` sets the chosen encoders to Relative #1 (`param 0x01`/`0x06`) so they become endless with the new encoder engine. Hardware needs to confirm which parameter IDs are correct here, so this is a stretch item.
 
+### External state sync (`state`)
+
+This keeps midiboard's internal state, and its LEDs, in line with changes made outside it, for example muting from the desktop.
+
+```jsonc
+"mute": {
+  "key": 36, "type": "note",
+  "command": { "kind": "Switch", "on": {...}, "off": {...} },
+  "state": {
+    "cmd": "pactl", "args": ["get-sink-mute", "@DEFAULT_SINK@"],
+    "on_when": { "stdout_matches": "yes" },    // or "exit_success"
+    "poll_ms": 2000                             // optional; omit to read only at startup and reconnect
+  },
+  "feedback": { "led": { "pad": 1, "on": "red", "off": "off" } }
+},
+"volume": {
+  "key": 1, "type": "cc",
+  "command": { "kind": "Encoder", "mode": "relative_offset64", ... },
+  "state": {
+    "cmd": "sh", "args": ["-c", "pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\\d+(?=%)' | head -1"],
+    "value_from": { "stdout_number": true },    // parsed into the map_min..map_max domain
+    "poll_ms": 5000
+  }
+}
+```
+
+- **Switch**: the state read at startup **replaces `initial_state`**, which becomes optional (it is required only when there is no `state` source). Each poll updates the state and repaints the LED if it changed.
+- **Encoder**: each read moves the internal position to the system value, so relative encoders continue from the real volume. While the knob is moving, and for `rate_limit_ms * 2` after it stops, polls are ignored so they don't fight the user.
+- **Execution**: polls run on the executor with a timeout, and never in parallel with a command for the same control. Before polling resumes after a command, the post-command state is read once, which confirms whether the command actually took effect.
+- **Errors**: a failing state command logs a warning at most once per minute and keeps the last known state.
+
 ### Diagnostics
 
 - `midiboard send --device X --hex "F0 00 20 6B 7F 42 02 00 10 70 01 F7"` sends raw bytes.
@@ -232,23 +284,26 @@ From community reverse-engineering. Arturia does not publish this protocol.
 
 ## 6. Hardware test checklist
 
-You run this on your BeatStep. I can't, because there is no MIDI hardware or ALSA sequencer here.
+You run this on your BeatStep, on both Linux and macOS (aarch64). I can't, because there is no MIDI hardware or ALSA sequencer here.
 
 1. `devices --list` shows both input and output ports.
 2. `led` lights each pad in every color; Stop ignores it.
 3. A switch pad's LED tracks its state across 50 toggles. The LED is correct after unplugging and replugging, and is cleared on Ctrl-C.
 4. Encoders in Relative #1 sweep 0→100 volume without stepping and land exactly where you stop. Capture a `--record` trace for the regression suite.
-5. A 1-hour soak with `heaptrack` shows flat memory.
+5. A 1-hour soak with `heaptrack` (Linux) or Instruments/`leaks` (macOS) shows flat memory.
+6. Muting or unmuting from the desktop updates the mute pad LED within `poll_ms`. The volume encoder continues from the current system volume after the volume is changed externally.
 
 ## 7. Phase 5: docs (goal 4)
 
 - Rewrite `docs/config.md` and `docs/events.md` for the new schema. They will cover encoder modes with diagrams of leading, throttle and trailing behavior, switches, triggers, feedback and profiles.
 - New `docs/feedback.md` (generic plus BeatStep) and `docs/encoders.md` (how to pick a mode, tuning, and the record/replay workflow).
 - `docs/cli.md` is generated from clap (`clap_mangen` or a `--help` dump), so it can't drift.
-- The README has the new install steps and the user systemd unit, and the "docs are outdated" banner is removed.
-- `schema/midiboard.schema.json` is updated: valid 2020-12 keywords, new fields, `deprecated` annotations, and fixed `$id`. The skeleton config gets updated, and a `examples/beatstep.json` is added.
+- The README has the new install steps for Linux and macOS, the systemd user unit and the launchd agent, and the "docs are outdated" banner is removed.
+- Example configs for both platforms: `examples/beatstep-linux.json` (`pactl`, `playerctl`) and `examples/beatstep-macos.json` (`osascript` volume and mute, media keys).
+- `docs/migration-0.5.md` shows how to rewrite each 0.3/0.4 config construct in the new format, side by side.
+- `schema/midiboard.schema.json` is updated: valid 2020-12 keywords, the new fields, a required `config_version`, and the `$id` moved to `choccydev/midiboard`. The skeleton config is rewritten for the new format.
 - A test checks that the shipped skeleton and examples validate against both the Rust types and the JSON schema (`jsonschema` dev-dependency).
-- `CHANGELOG.md` gets a migration section.
+- `CHANGELOG.md` covers 0.3.3, 0.4.0 and 0.5.0, and the 0.5.0 entry links the migration guide.
 
 ## 8. Order of work and size
 
@@ -258,16 +313,16 @@ You run this on your BeatStep. I can't, because there is no MIDI hardware or ALS
 | 2 | Phase 2 (pipeline, parser, bug fixes B1–B19, leak check) | yes, the largest |
 | 3 | Phase 3 (encoder engine, record/replay, trace tests) | yes |
 | 4 | Phase 4 (output layer, BeatStep profile, diagnostics) | yes |
-| 5 | Phase 5 (docs, schema, changelog, 0.4.0) | yes |
+| 5 | Phase 5 (docs, schema, changelog, 0.5.0) | yes |
 
 These can be one PR with a commit per step, or five stacked PRs. I'd do one branch with clean commits per step.
 
-## 9. Decisions I need from you
+## 9. Decisions (resolved)
 
-- **D1 Logging**: replace the custom `Logger` with `tracing` (levels, `RUST_LOG` override, journald-friendly), keeping colored output and the config `log_level`? *Recommended: yes.* The alternative is to keep `Logger` and fix it.
-- **D2 Config compatibility**: keep old configs working with deprecation warnings (*recommended*), or make a clean break in 0.4?
-- **D3 Repo identity**: `Cargo.toml`, the schema `$id` and the docs point at `aordano/midiboard` and `aordano/control-board`, and the author email is `aordano@protonmail.com`. Should these move to `choccydev/midiboard` and a new email?
-- **D4 Switch failure semantics**: if the `on`/`off` command fails, should the switch keep its old state (*recommended*, so the LED is truthful), or toggle anyway?
-- **D5 Platforms**: Linux/ALSA only (as documented), or keep midir's macOS and Windows backends compiling, without testing them?
-- **D6 Shell**: commands are exec'd directly today. Add an optional `"shell": true` (runs `sh -c`) for pipes and env expansion?
-- **D7 External state sync** (stretch): optionally poll a `state_cmd` (e.g. `pactl get-sink-mute`) so the mute LED follows changes made outside midiboard?
+- **D1 Logging**: replace the custom `Logger` with `tracing`. ✅
+- **D2 Config compatibility**: clean break in 0.5.0 with `config_version: 2`. Existing behavior is released first as `v0.3.3` and `v0.4.0`. ✅
+- **D3 Identity**: move to `choccydev/midiboard`. The author email is `gh@choccymilk.dev`. ✅
+- **D4 Switch failure**: if the command fails, the switch keeps its old state. ✅
+- **D5 Platforms**: Linux plus macOS on aarch64, both covered in CI. Windows isn't a target, but midir code isn't deliberately made Linux-only. ✅
+- **D6 Shell**: an optional `"shell": true`, with placeholders shell-quoted. ✅
+- **D7 External state sync**: included in Phase 4, for both switches and encoders. ✅
