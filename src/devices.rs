@@ -1,92 +1,119 @@
-use super::types::LogLevel;
-use super::util;
-use anyhow::Error;
-use midir::{Ignore, MidiInput};
-use std::io::stdin;
+//! Device inspection and diagnostics: list, listen/record, send, led.
 
-pub fn run(cli: &clap::ArgMatches) -> Result<(), Error> {
-    let list = cli
-        .get_one::<bool>("list")
-        .ok_or(Error::msg("Bad --list command."))?;
-    let listen = cli.get_one::<String>("listen");
+use crate::beatstep;
+use crate::config::LedTarget;
+use crate::midi::{self, MidiMsg};
+use crate::runtime;
+use anyhow::{Context, Result, bail};
+use crossbeam_channel::unbounded;
+use midir::{MidiInput, MidiOutput};
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use std::path::Path;
+use std::time::Instant;
 
-    if *list {
-        return list_devices();
+pub fn list() -> Result<()> {
+    let input = MidiInput::new("midiboard-list")?;
+    let output = MidiOutput::new("midiboard-list")?;
+    let inputs = runtime::input_port_names(&input);
+    let outputs = runtime::output_port_names(&output);
+    println!("Inputs (use as a device `name`):");
+    if inputs.is_empty() {
+        println!("  (none)");
     }
-
-    if listen.is_some() {
-        let device = cli
-            .get_one::<String>("listen")
-            .ok_or(Error::msg("No device name provided"))?
-            .to_string();
-        return listen_to_device(device);
+    for n in &inputs {
+        println!("  {n}");
     }
-
-    panic!("No valid argument provided to the config subcommand.")
+    println!("\nOutputs (for feedback):");
+    if outputs.is_empty() {
+        println!("  (none)");
+    }
+    for n in &outputs {
+        println!("  {n}");
+    }
+    Ok(())
 }
 
-fn list_devices() -> Result<(), Error> {
-    let mut midi_in = MidiInput::new("midir reading input")?;
-    midi_in.ignore(Ignore::None);
+enum Ev {
+    Midi(u64, Vec<u8>),
+    Stop,
+}
 
-    let log = util::Logger::new(LogLevel::Debug);
+/// Prints every message from `device`. With `record`, also writes a trace
+/// for `midiboard replay`: one `t_us,hex bytes` line per message.
+pub fn listen(device: &str, record: Option<&Path>) -> Result<()> {
+    let (tx, rx) = unbounded::<Ev>();
+    let start = Instant::now();
+    let cb_tx = tx.clone();
+    let _conn = runtime::open_input(device, "midiboard-listen", move |_stamp, bytes, _| {
+        let t = start.elapsed().as_micros() as u64;
+        let _ = cb_tx.send(Ev::Midi(t, bytes.to_vec()));
+    })?;
 
-    log.info("Currently connected devices:\n");
+    let mut writer = match record {
+        Some(path) => {
+            let f = File::create(path).with_context(|| format!("could not create {}", path.display()))?;
+            let mut w = BufWriter::new(f);
+            writeln!(w, "t_us,bytes")?;
+            Some(w)
+        }
+        None => None,
+    };
 
-    let in_ports = midi_in.ports();
-    match in_ports.len() {
-        0 => return Err(Error::msg("No devices found.")),
-        _ => {
-            for (_i, p) in in_ports.iter().enumerate() {
-                log.default(
-                    &midi_in
-                        .port_name(p)?
-                        .split_terminator(':')
-                        .collect::<Vec<&str>>()[0],
-                )
+    let stop_tx = tx.clone();
+    ctrlc::set_handler(move || {
+        let _ = stop_tx.send(Ev::Stop);
+    })?;
+    let enter_tx = tx;
+    std::thread::spawn(move || {
+        let mut line = String::new();
+        let _ = std::io::stdin().read_line(&mut line);
+        let _ = enter_tx.send(Ev::Stop);
+    });
+
+    eprintln!("Listening to \"{device}\". Press Enter or Ctrl-C to stop.");
+    let mut count = 0u64;
+    for ev in rx {
+        match ev {
+            Ev::Stop => break,
+            Ev::Midi(t, bytes) => {
+                count += 1;
+                match MidiMsg::parse(&bytes) {
+                    Some(msg) => println!("{msg}"),
+                    None if bytes.first().is_some_and(|b| *b >= 0xF8) => continue, // clock etc.
+                    None => println!("other: {}", midi::hex(&bytes)),
+                }
+                if let Some(w) = writer.as_mut() {
+                    writeln!(w, "{t},{}", midi::hex(&bytes))?;
+                }
             }
         }
-    };
-    return Ok(());
+    }
+    if let Some(mut w) = writer {
+        w.flush()?;
+        eprintln!("Recorded {count} messages to {}.", record.map(|p| p.display().to_string()).unwrap_or_default());
+    }
+    Ok(())
 }
 
-fn listen_to_device(device: String) -> Result<(), Error> {
-    let log = util::Logger::new(LogLevel::Debug);
-    let mut user_input = String::new();
-    let mut midi_input = MidiInput::new("Midiboard: Device Listener")?;
-
-    midi_input.ignore(Ignore::None);
-
-    let in_port = util::get_input_port(&device, log)?;
-
-    log.info("Opening connection...");
-
-    let _conn = match midi_input.connect(
-        &in_port,
-        "midir-read-input",
-        move |_stamp, message, _| {
-            let closure_log = util::Logger::new(LogLevel::Debug);
-            closure_log.default(util::string_to_sstr(format!(
-                "key: {}, value: {}",
-                message[1], message[2]
-            )));
-        },
-        (),
-    ) {
-        Ok(connect) => connect,
-        Err(error) => return Err(Error::msg(error.to_string())),
-    };
-
-    log.success(util::string_to_sstr(format!(
-        "Connection open, listening events from {}",
-        device
-    )));
-
-    log.info("Press any key to stop listening\n");
-
-    user_input.clear();
-    stdin().read_line(&mut user_input)?; // wait for next enter key press
-
-    log.info("Connection closed.");
+pub fn send(device: &str, hex: &str) -> Result<()> {
+    let bytes = midi::parse_hex(hex).map_err(anyhow::Error::msg)?;
+    if bytes.is_empty() {
+        bail!("nothing to send");
+    }
+    if bytes[0] == 0xF0 {
+        midi::validate_sysex(&bytes).map_err(anyhow::Error::msg)?;
+    } else if MidiMsg::parse(&bytes).is_none() {
+        bail!("`{hex}` is not a complete channel message or SysEx");
+    }
+    let mut out = runtime::open_output(device, "midiboard-send")?;
+    out.send(&bytes).context("could not send")?;
+    eprintln!("Sent {}", midi::hex(&bytes));
     Ok(())
+}
+
+pub fn led(device: &str, pad: Option<u8>, button: Option<String>, color: &str) -> Result<()> {
+    let id = beatstep::led_id(&LedTarget { pad, button }).map_err(anyhow::Error::msg)?;
+    let c = beatstep::color(color).map_err(anyhow::Error::msg)?;
+    send(device, &midi::hex(&beatstep::led_message(id, c)))
 }
