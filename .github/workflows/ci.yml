@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: ["**"]
   pull_request:
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
