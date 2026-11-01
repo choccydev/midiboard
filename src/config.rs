@@ -872,6 +872,37 @@ mod tests {
         assert_eq!(parse(SKELETON).unwrap().schema.as_deref(), Some(SCHEMA_URL));
     }
 
+    const EXAMPLES: [(&str, &str); 3] = [
+        ("schema/midiboard.json", SKELETON),
+        ("examples/beatstep-linux.json", include_str!("../examples/beatstep-linux.json")),
+        ("examples/beatstep-macos.json", include_str!("../examples/beatstep-macos.json")),
+    ];
+
+    #[test]
+    fn examples_are_valid() {
+        for (name, text) in EXAMPLES {
+            if let Err(e) = compile_str(text) {
+                panic!("{name}: {e:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn examples_match_the_json_schema() {
+        let schema: serde_json::Value =
+            serde_json::from_str(include_str!("../schema/midiboard.schema.json")).expect("schema is JSON");
+        assert_eq!(schema["$id"], SCHEMA_URL);
+        let validator = jsonschema::validator_for(&schema).expect("schema compiles");
+        for (name, text) in EXAMPLES {
+            let instance: serde_json::Value = serde_json::from_str(text).unwrap();
+            let errors: Vec<String> = validator.iter_errors(&instance).map(|e| e.to_string()).collect();
+            assert!(errors.is_empty(), "{name} fails the schema: {errors:#?}");
+        }
+        // And the schema rejects what the loader rejects.
+        let old: serde_json::Value = serde_json::from_str(r#"{"log_level":"Warn","config":[]}"#).unwrap();
+        assert!(!validator.is_valid(&old));
+    }
+
     #[test]
     fn old_configs_get_a_migration_hint() {
         let old = r#"{"log_level":"Warn","config":[{"device":"x","thresholds":{},"controls":{}}]}"#;

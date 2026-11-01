@@ -217,6 +217,40 @@ mod tests {
         Cli::command().debug_assert();
     }
 
+    /// docs/cli.md is generated from the clap definitions. Run
+    /// `UPDATE_DOCS=1 cargo test cli_docs` after changing the CLI.
+    #[test]
+    fn cli_docs_are_up_to_date() {
+        let mut root = Cli::command().term_width(100);
+        root.build();
+        let mut md = String::from(
+            "# CLI reference\n\n<!-- Generated from the clap definitions by `UPDATE_DOCS=1 cargo test cli_docs`. Don't edit by hand. -->\n",
+        );
+        let mut section = |title: &str, cmd: &mut clap::Command| {
+            md.push_str(&format!("\n## {title}\n\n```text\n{}\n```\n", cmd.render_long_help().to_string().trim_end()));
+        };
+        section("midiboard", &mut root.clone());
+        for sub in root.get_subcommands_mut() {
+            let name = sub.get_name().to_string();
+            if name == "help" {
+                continue;
+            }
+            section(&format!("midiboard {name}"), &mut sub.clone());
+            for subsub in sub.get_subcommands_mut() {
+                let n2 = subsub.get_name().to_string();
+                if n2 != "help" {
+                    section(&format!("midiboard {name} {n2}"), &mut subsub.clone());
+                }
+            }
+        }
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/docs/cli.md");
+        if std::env::var_os("UPDATE_DOCS").is_some() {
+            std::fs::write(path, &md).unwrap();
+        }
+        let current = std::fs::read_to_string(path).unwrap_or_default();
+        assert!(current == md, "docs/cli.md is out of date; run `UPDATE_DOCS=1 cargo test cli_docs`");
+    }
+
     #[test]
     fn generate_then_validate() {
         let dir = tempfile::tempdir().unwrap();

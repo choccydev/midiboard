@@ -1,0 +1,139 @@
+{
+    "$schema": "https://raw.githubusercontent.com/choccydev/midiboard/master/schema/midiboard.schema.json",
+    "config_version": 2,
+    "log_level": "info",
+    "devices": [
+        {
+            "name": "Arturia BeatStep",
+            "output": {
+                "profile": "beatstep",
+                "take_over_pads": true
+            },
+            "controls": {
+                "volume": {
+                    "key": 7,
+                    "type": "cc",
+                    "command": {
+                        "kind": "Encoder",
+                        "mode": "relative_offset64",
+                        "map_min": 0,
+                        "map_max": 100,
+                        "step": 1,
+                        "acceleration": { "curve": 1.5, "max_gain": 4 },
+                        "rate_limit_ms": 30,
+                        "execute": {
+                            "cmd": "pactl",
+                            "args": ["set-sink-volume", "@DEFAULT_SINK@", "{value}%"]
+                        }
+                    },
+                    "state": {
+                        "cmd": "pactl",
+                        "args": ["get-sink-volume", "@DEFAULT_SINK@"],
+                        "match": "(\\d+)%",
+                        "poll_ms": 5000
+                    }
+                },
+                "brightness": {
+                    "key": 10,
+                    "type": "cc",
+                    "command": {
+                        "kind": "Encoder",
+                        "mode": "relative_offset64",
+                        "map_min": 1,
+                        "map_max": 100,
+                        "initial": 50,
+                        "execute": {
+                            "cmd": "brightnessctl",
+                            "args": ["set", "{value}%"]
+                        }
+                    }
+                },
+                "mute": {
+                    "key": 36,
+                    "type": "note",
+                    "command": {
+                        "kind": "Switch",
+                        "on": { "cmd": "pactl", "args": ["set-sink-mute", "@DEFAULT_SINK@", "1"] },
+                        "off": { "cmd": "pactl", "args": ["set-sink-mute", "@DEFAULT_SINK@", "0"] }
+                    },
+                    "state": {
+                        "cmd": "pactl",
+                        "args": ["get-sink-mute", "@DEFAULT_SINK@"],
+                        "match": "yes",
+                        "poll_ms": 2000
+                    },
+                    "feedback": {
+                        "led": { "pad": 1 },
+                        "on": "red",
+                        "off": "off",
+                        "error": "magenta"
+                    }
+                },
+                "mic_mute": {
+                    "key": 37,
+                    "type": "note",
+                    "command": {
+                        "kind": "Switch",
+                        "on": { "cmd": "pactl", "args": ["set-source-mute", "@DEFAULT_SOURCE@", "1"] },
+                        "off": { "cmd": "pactl", "args": ["set-source-mute", "@DEFAULT_SOURCE@", "0"] }
+                    },
+                    "state": {
+                        "cmd": "pactl",
+                        "args": ["get-source-mute", "@DEFAULT_SOURCE@"],
+                        "match": "yes",
+                        "poll_ms": 2000
+                    },
+                    "feedback": {
+                        "led": { "pad": 2 },
+                        "on": "blue",
+                        "off": "off"
+                    }
+                },
+                "play_pause": {
+                    "key": 38,
+                    "type": "note",
+                    "command": {
+                        "kind": "Trigger",
+                        "execute": { "cmd": "playerctl", "args": ["play-pause"] }
+                    },
+                    "feedback": {
+                        "led": { "pad": 3 },
+                        "on": "blue",
+                        "flash_ms": 150,
+                        "error": "magenta"
+                    }
+                },
+                "next_track": {
+                    "key": 39,
+                    "type": "note",
+                    "command": {
+                        "kind": "Trigger",
+                        "execute": { "cmd": "playerctl", "args": ["next"] }
+                    },
+                    "feedback": {
+                        "led": { "pad": 4 },
+                        "on": "red",
+                        "flash_ms": 150
+                    }
+                },
+                "screenshot": {
+                    "key": 40,
+                    "type": "note",
+                    "command": {
+                        "kind": "Trigger",
+                        "execute": {
+                            "cmd": "grim -g \"$(slurp)\" ~/Pictures/screenshot-$(date +%s).png",
+                            "shell": true,
+                            "timeout_ms": 60000
+                        }
+                    },
+                    "feedback": {
+                        "led": { "pad": 5 },
+                        "on": "red",
+                        "while_running": true
+                    }
+                }
+            }
+        }
+    ]
+}

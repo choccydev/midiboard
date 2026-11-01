@@ -1,6 +1,12 @@
 # Midiboard modernization plan
 
-Status: **decisions resolved (§9), ready to implement**.
+Status: **implemented** on this branch. Notes on what changed from the plan:
+
+- `midiboard devices --input` became `midiboard listen`, and traces are saved as `t_us,bytes` (hex) instead of separate status/data columns.
+- The BeatStep note-on fallback isn't automatic (midiboard can't tell whether SysEx was accepted). Use a `note` feedback target instead, as `docs/feedback.md` explains.
+- The `midiboard beatstep setup` stretch item (switching encoders to relative mode over SysEx) isn't done; set the encoder mode in MIDI Control Center.
+- Commands run on one short-lived thread each instead of a pool. The engine allows at most one command and one state read per control, so the thread count is bounded.
+- Hardware testing (§6) is still pending.
 Target release: `0.5.0`. This is a breaking config change; old configs are dropped.
 
 ## Releases before the rewrite

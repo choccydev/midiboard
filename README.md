@@ -1,130 +1,116 @@
-# MidiBoard
+# midiboard
 
-CLI tool to trigger arbitrary commands using any MIDI 1.0 compatible  device.
+Run commands from any MIDI controller: turn a knob to change the volume, press a
+pad to toggle mute, launch scripts from buttons, and light up the controller's
+LEDs to show what's going on.
 
-## Docs are oudated; trust more the schema file than this until it's updated
+- **Encoders that feel right**: every movement counts, commands run at a
+  bounded rate, and the final value always lands. Absolute and relative
+  (endless) encoders, acceleration, and jitter filtering for noisy pots.
+- **Switches and triggers** for pads and buttons, with debouncing.
+- **LED feedback**, including the Arturia BeatStep's pad and button LEDs, and
+  generic note, CC and SysEx output for other controllers.
+- **State sync**: mute from the desktop and the mute pad lights up; relative
+  knobs continue from the current volume.
+- **Robust**: several devices at once, reconnects after unplugging, commands
+  never block MIDI input, and every config error is reported up front.
+- Linux (ALSA) and macOS (CoreMIDI).
 
-<!-- vscode-markdown-toc -->
-* 1. [What is this?](#Whatisthis)
-* 2. [Getting Started](#GettingStarted)
-* 3. [Install](#Install)
-  * 3.1. [Cargo](#Cargo)
-  * 3.2. [Manual](#Manual)
-* 4. [Configuration](#Configuration)
-  * 4.1. [Create a skeleton](#Createaskeleton)
-  * 4.2. [Define your device](#Defineyourdevice)
-  * 4.3. [Define each command](#Defineeachcommand)
-* 5. [Running](#Running)
-  * 5.1. [Manually](#Manually)
-  * 5.2. [Daemonized](#Daemonized)
+```json
+"mute": {
+    "key": 36,
+    "type": "note",
+    "command": {
+        "kind": "Switch",
+        "on": { "cmd": "pactl", "args": ["set-sink-mute", "@DEFAULT_SINK@", "1"] },
+        "off": { "cmd": "pactl", "args": ["set-sink-mute", "@DEFAULT_SINK@", "0"] }
+    },
+    "state": { "cmd": "pactl", "args": ["get-sink-mute", "@DEFAULT_SINK@"], "match": "yes", "poll_ms": 2000 },
+    "feedback": { "led": { "pad": 1 }, "on": "red", "off": "off" }
+}
+```
 
-<!-- vscode-markdown-toc-config
-	numbering=true
-	autoSave=true
-	/vscode-markdown-toc-config -->
-<!-- /vscode-markdown-toc -->
+## Install
 
-## 1. <a name='Whatisthis'></a>What is this?
+### Cargo
 
-This tool lets the user associate any executable commands to actions in one or more MIDI devices, like changing volume, altering backlight level, changing a song, starting/stopping a service, or launching any script/executable, on the press of a button or turn of a knob.
+```bash
+cargo install midiboard
+```
 
-## 2. <a name='GettingStarted'></a>Getting Started
+On Linux this needs the ALSA headers: `libasound2-dev` (Debian/Ubuntu),
+`alsa-lib-devel` (Fedora) or `alsa-lib` (Arch). macOS needs nothing extra.
 
-To use this software you need to install it, define a configuration, and then either run at-will or daemonize the process. The most cumbersome part, of course is writing the configuration file.
+### Prebuilt binaries
 
-For details check [the docs](https://github.com/aordano/midiboard/tree/master/docs).
+Download the archive for your platform (Linux x86_64 or macOS Apple Silicon)
+from the [releases page](https://github.com/choccydev/midiboard/releases) and
+put `midiboard` somewhere on your `PATH`.
 
-## 3. <a name='Install'></a>Install
+### From source
 
-### 3.1. <a name='Cargo'></a>Cargo
+```bash
+git clone https://github.com/choccydev/midiboard.git
+cd midiboard
+cargo install --path .
+```
 
-   ```bash
-   cargo install midiboard
-   ```
+## Quick start
 
-### 3.2. <a name='Manual'></a>Manual
+```bash
+midiboard devices              # find your controller's name
+midiboard listen beatstep      # see what each pad and knob sends
+midiboard config generate      # write ~/.config/midiboard/config.json
+$EDITOR ~/.config/midiboard/config.json
+midiboard config validate      # check it
+midiboard run                  # go
+```
 
-1. Clone
+The [getting started guide](docs/readme.md#getting-started) walks through it,
+and [`examples/`](examples) has complete configs for an Arturia BeatStep on
+Linux and macOS.
 
-   ```bash
-   git clone https://github.com/aordano/midiboard.git
-   ```
+## Run as a service
 
-2. Build
+### Linux (systemd user unit)
 
-   ```bash
-   cd midiboard
-   cargo build --release
-   ```
+midiboard runs as a **user** service, so commands like `pactl`, `wpctl` and
+`playerctl` can reach your audio server and session bus.
 
-3. Copy binary
+```bash
+mkdir -p ~/.config/systemd/user
+curl -o ~/.config/systemd/user/midiboard.service \
+  https://raw.githubusercontent.com/choccydev/midiboard/master/dist/midiboard.service
+# Edit ExecStart if midiboard isn't in ~/.cargo/bin.
+systemctl --user daemon-reload
+systemctl --user enable --now midiboard
+journalctl --user -u midiboard -f    # logs
+```
 
-   ```bash
-   sudo cp ./target/release/midiboard /usr/bin/midiboard
-   ```
+### macOS (launchd agent)
 
-## 4. <a name='Configuration'></a>Configuration
+```bash
+curl -o /tmp/midiboard.plist \
+  https://raw.githubusercontent.com/choccydev/midiboard/master/dist/dev.choccymilk.midiboard.plist
+# Edit the program path inside if midiboard isn't in ~/.cargo/bin.
+sed "s|@HOME@|$HOME|g" /tmp/midiboard.plist > ~/Library/LaunchAgents/dev.choccymilk.midiboard.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.choccymilk.midiboard.plist
+tail -f ~/Library/Logs/midiboard.log   # logs
+```
 
-For details on the configuration file check the [config docs page](https://github.com/aordano/midiboard/blob/master/docs/config.md).
+Both restart midiboard if it exits with an error.
 
-For help using the CLI, there is integrated help via the `--help` flag.
+## Documentation
 
-### 4.1. <a name='Createaskeleton'></a>Create a skeleton
+- [Getting started](docs/readme.md)
+- [Config reference](docs/config.md)
+- [How controls behave](docs/controls.md)
+- [Encoders](docs/encoders.md)
+- [Feedback and state](docs/feedback.md)
+- [CLI reference](docs/cli.md)
+- [Migrating from 0.3/0.4](docs/migration-0.5.md)
+- [Changelog](CHANGELOG.md)
 
- This will create it at `$HOME/midiboard.json`. Optionally add a `--path` flag to change the output location:
+## License
 
-   ```bash
-   midiboard config --generate
-   ```
-
-### 4.2. <a name='Defineyourdevice'></a>Define your device
-
-Get the name of your device and put it in the `device` field in the config:
-
-   ```bash
-   midiboard devices --list
-   ```
-
-### 4.3. <a name='Defineeachcommand'></a>Define each command
-
-Listen to the input to know what Is the numerical key value of your chosen knob/button/key:
-
-   ```bash
-   midiboard devices --input [DEVICE_NAME]
-   ```
-
-   With that value you can fill the corresponding entry on the config file.
-
-## 5. <a name='Running'></a>Running
-
-### 5.1. <a name='Manually'></a>Manually
-
-By default it will expect a config file at `$HOME/midiboard.json`.Optionally add a `--path` flag to change the output location:
-
-   ```bash
-   midiboard run
-   ```
-
-### 5.2. <a name='Daemonized'></a>Daemonized
-
-1. Get the service file
-
-   ```bash
-   wget -O midiboard.service https://raw.githubusercontent.com/aordano/midiboard/master/schema/midiboard.service
-   ```
-
-2. Patch and move the service file
-
-   ```bash
-   sed -i "s/@USER@/$(whoami)/g" midiboard.service
-   sudo mv midiboard.service /etc/systemd/system/midiboard.service
-   ```
-
-   The file uses the default config location. Modify the service file if you have an alternate path for the config file (add the `--path` flag).
-
-3. Enable the service
-
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now midiboard
-   ```
+MIT

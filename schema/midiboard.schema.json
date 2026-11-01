@@ -1,296 +1,509 @@
 {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://raw.githubusercontent.com/aordano/control-board/master/schema/midiboard.schema.json",
-    "title": "Midiboard Config",
-    "description": "Configuration file for the midiboard MIDI control CLI tool",
-    "type": "object",
-    "properties": {
-        "$schema": {
-            "description": "Validation Schema for this file",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/choccydev/midiboard/master/schema/midiboard.schema.json",
+  "title": "Midiboard config",
+  "description": "Config file for midiboard 0.5 and later (config_version 2).",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Schema for editor validation and completion."
+    },
+    "config_version": {
+      "const": 2,
+      "description": "Config format version. midiboard 0.5 reads version 2."
+    },
+    "log_level": {
+      "enum": [
+        "error",
+        "warn",
+        "info",
+        "debug",
+        "trace"
+      ],
+      "default": "warn",
+      "description": "Log level for `midiboard run`. RUST_LOG overrides it."
+    },
+    "devices": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
             "type": "string",
-            "const": "https://raw.githubusercontent.com/aordano/control-board/master/schema/midiboard.schema.json",
-            "default": "https://raw.githubusercontent.com/aordano/control-board/master/schema/midiboard.schema.json"
-        },
-        "log_level": {
-            "description": "Which levels of logs are printed.",
-            "type": "string",
-            "enum": ["Debug", "Info", "Warn", "Error", "Trace"]
-        },
-        "config": {
-            "description": "The actual configuration data. It's an array containing multiple possible devices and their controls.",
-            "type": "array",
-            "minItems": 1,
-            "uniqueItems": true,
-            "items": {
-                "type": "object",
-                "properties": {
-                    "device": {
-                        "description": "The exact name of the MIDI device to listen, as the system reads it.",
-                        "type": "string"
-                    },
-                    "controls": {
-                        "description": "Actual control entries to listen for. List a unique, memorable name per entry. Only lowercase, numbers and low dash allowed.",
-                        "type": "object",
-                        "patternProperties": {
-                            "^[a-z]{1}[a-z0-9_]+": {
-                                "type": "object",
-                                "description": "Entry for control. It can be of either Encoder, Trigger, or Switch type according to the action performed on the device.",
-                                "properties": {
-                                    "key": {
-                                        "description": "Key of the selected MIDI controller to listen for.",
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 128,
-                                        "exclusiveMaximum": true
-                                    },
-                                    "command": {
-                                        "oneOf": [
-                                            {
-                                                "type": "object",
-                                                "description": "Commands to execute on increase or decrease of the encoder value.",
-                                                "properties": {
-                                                    "kind": {
-                                                        "description": "Kind of action to perform. Encoder reads increments or decrements, sampling several inputs and executing the command if an increment or decrement is detected.",
-                                                        "type": "string",
-                                                        "const": "Encoder"
-                                                    },
-                                                    "execute": {
-                                                        "description": "Command to be executed by Bash on detection of an increase in the encoder value.",
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "cmd": {
-                                                                "description": "Base command to invoke.",
-                                                                "type": "string"
-                                                            },
-                                                            "args": {
-                                                                "description": "Args provided to the command.",
-                                                                "type": "array",
-                                                                "items": {
-                                                                    "type": "string"
-                                                                }
-                                                            },
-                                                            "map_min": {
-                                                                "description": "Integer to map to level 0 of the selected key.",
-                                                                "type": "integer"
-                                                            },
-                                                            "replace": {
-                                                                "description": "String to replace the mapped values for, either in CMD or ARGS",
-                                                                "type": "string"
-                                                            },
-                                                            "map_max": {
-                                                                "description": "Integer to map to level 127 of the selected key.",
-                                                                "type": "integer"
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                                "additionalProperties": false,
-                                                "required": ["execute", "kind"]
-                                            },
-                                            {
-                                                "type": "object",
-                                                "description": "Commands to execute on a press of the switch.",
-                                                "properties": {
-                                                    "kind": {
-                                                        "description": "Kind of action to perform. Switch starts with the given state by default and reads an input, toggling the state and executing the corresponding command immediately.",
-                                                        "type": "string",
-                                                        "const": "Switch"
-                                                    },
-                                                    "on": {
-                                                        "description": "Command to be executed by Bash after triggering an ON event.",
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "cmd": {
-                                                                "description": "Base command to invoke.",
-                                                                "type": "string"
-                                                            },
-                                                            "args": {
-                                                                "description": "Args provided to the command.",
-                                                                "type": "array",
-                                                                "items": {
-                                                                    "type": "string"
-                                                                }
-                                                            }
-                                                        }
-                                                    },
-                                                    "off": {
-                                                        "description": "Command to be executed by Bash after triggering an OFF event.",
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "cmd": {
-                                                                "description": "Base command to invoke.",
-                                                                "type": "string"
-                                                            },
-                                                            "args": {
-                                                                "description": "Args provided to the command.",
-                                                                "type": "array",
-                                                                "items": {
-                                                                    "type": "string"
-                                                                }
-                                                            }
-                                                        }
-                                                    },
-                                                    "initial_state": {
-                                                        "description": "Default state to be assumed at the start of the application.",
-                                                        "type": "string",
-                                                        "enum": ["ON", "OFF"]
-                                                    }
-                                                },
-                                                "additionalProperties": false,
-                                                "required": [
-                                                    "on",
-                                                    "off",
-                                                    "initial_state",
-                                                    "kind"
-                                                ]
-                                            },
-                                            {
-                                                "type": "object",
-                                                "description": "Commands to execute on a press of the trigger.",
-                                                "properties": {
-                                                    "kind": {
-                                                        "description": "Kind of action to perform. Trigger simply executes the corresponding command immediately.",
-                                                        "type": "string",
-                                                        "const": "Trigger"
-                                                    },
-                                                    "execute": {
-                                                        "description": "Command to be executed by Bash after triggering the event.",
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "cmd": {
-                                                                "description": "Base command to invoke.",
-                                                                "type": "string"
-                                                            },
-                                                            "args": {
-                                                                "description": "Args provided to the command.",
-                                                                "type": "array",
-                                                                "items": {
-                                                                    "type": "string"
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                                "additionalProperties": false,
-                                                "required": ["execute", "kind"]
-                                            }
-                                        ]
-                                    },
-                                    "threshold": {
-                                        "oneOf": [
-                                            {
-                                                "type": "object",
-                                                "description": "Time thresholds for activation and detecion of encoder controls.",
-                                                "properties": {
-                                                    "activation": {
-                                                        "description": "Activation threshold in milliseconds for a encoder control. This is the total time elapsed since the first detection of the associated key without triggering a new command. Encoder activation time should usually lie between 500ms and 2000ms.",
-                                                        "type": "integer",
-                                                        "minimum": 0,
-                                                        "maximum": 5000,
-                                                        "default": 750
-                                                    },
-                                                    "detection": {
-                                                        "description": "Detection threshold in milliseconds for a encoder control. This is the minimum time elapsed needed since the last detection of the key, to trigger a new detection. Encoder detection time should usually lie between 50 and 250 ms.",
-                                                        "type": "integer",
-                                                        "minimum": 0,
-                                                        "maximum": 500,
-                                                        "default": 300
-                                                    }
-                                                },
-                                                "additionalProperties": false,
-                                                "required": [
-                                                    "detection",
-                                                    "activation"
-                                                ]
-                                            },
-                                            {
-                                                "type": "object",
-                                                "description": "Time thresholds for activation and detecion of switch or trigger controls.",
-                                                "properties": {
-                                                    "activation": {
-                                                        "description": "Activation threshold in milliseconds for a switch or trigger control. This is the total time elapsed since the first detection of the associated key without triggering a new command. Encoder activation time should usually lie between 500ms and 2000ms.",
-                                                        "type": "integer",
-                                                        "minimum": 0,
-                                                        "maximum": 5000,
-                                                        "default": 750
-                                                    }
-                                                },
-                                                "additionalProperties": false,
-                                                "required": ["activation"]
-                                            }
-                                        ]
-                                    }
-                                },
-                                "required": ["command", "key"],
-                                "additionalProperties": false
-                            }
-                        }
-                    },
-                    "thresholds": {
-                        "type": "object",
-                        "description": "Time thresholds for activation and detection of the controls.",
-                        "properties": {
-                            "encoder": {
-                                "type": "object",
-                                "description": "Time thresholds for activation and detecion of encoder controls.",
-                                "properties": {
-                                    "activation": {
-                                        "description": "Activation threshold in milliseconds for a encoder control. This is the total time elapsed since the first detection of the associated key without triggering a new command. Encoder activation time should usually lie between 500ms and 2000ms.",
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 5000,
-                                        "default": 750
-                                    },
-                                    "detection": {
-                                        "description": "Detection threshold in milliseconds for a encoder control. This is the minimum time elapsed needed since the last detection of the key, to trigger a new detection. Encoder detection time should usually lie between 50 and 250 ms.",
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 500,
-                                        "default": 300
-                                    }
-                                },
-                                "additionalProperties": false,
-                                "required": ["detection", "activation"]
-                            },
-                            "switch": {
-                                "type": "object",
-                                "description": "Time thresholds for activation of switch controls.",
-                                "properties": {
-                                    "activation": {
-                                        "description": "Activation threshold in milliseconds for a switch control. This is the total time elapsed since the first detection of the key that will be considered for detections without triggering a new command. Switches should usually lie between 200ms and 1000ms.",
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 5000,
-                                        "default": 300
-                                    }
-                                },
-                                "additionalProperties": false,
-                                "required": ["activation"]
-                            },
-                            "trigger": {
-                                "type": "object",
-                                "description": "Time thresholds for activation of trigger controls.",
-                                "properties": {
-                                    "activation": {
-                                        "description": "Activation threshold in milliseconds for a trigger control. This is the minimum time elapsed before triggering a new command. Triggers should usually lie between 1000ms and 10000ms.",
-                                        "type": "integer",
-                                        "minimum": 0,
-                                        "maximum": 10000,
-                                        "default": 1000
-                                    }
-                                },
-                                "additionalProperties": false,
-                                "required": ["activation"]
-                            }
-                        },
-                        "additionalProperties": false,
-                        "required": ["encoder", "switch", "trigger"]
-                    }
-                },
-                "additionalProperties": false,
-                "required": ["device", "controls", "thresholds"]
+            "minLength": 1,
+            "description": "Input port to listen to: the full name, the client name, or a unique part of it, as shown by `midiboard devices`."
+          },
+          "output": {
+            "type": "object",
+            "description": "Where feedback goes. Optional: an output with the same name as the input is opened automatically when any control has feedback.",
+            "properties": {
+              "port": {
+                "type": "string",
+                "description": "Output port; defaults to the device name."
+              },
+              "profile": {
+                "enum": [
+                  "beatstep"
+                ],
+                "description": "Device profile that resolves `led` feedback."
+              },
+              "take_over_pads": {
+                "type": "boolean",
+                "default": false,
+                "description": "BeatStep: put pads with LED feedback in gate mode on connect, so the device stops driving those LEDs."
+              }
+            },
+            "additionalProperties": false
+          },
+          "controls": {
+            "type": "object",
+            "minProperties": 1,
+            "description": "Controls by name.",
+            "propertyNames": {
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "additionalProperties": {
+              "$ref": "#/$defs/control"
             }
+          }
         },
-        "required": ["config"]
+        "required": [
+          "name",
+          "controls"
+        ],
+        "additionalProperties": false
+      }
     }
+  },
+  "required": [
+    "config_version",
+    "devices"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "exec": {
+      "type": "object",
+      "description": "A command to run. Without `shell`, `cmd` is run directly with `args`. Placeholders like `{value}` are substituted first.",
+      "properties": {
+        "cmd": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Program to run, or with `shell: true` the whole shell command line."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Arguments. Must be empty with `shell: true`."
+        },
+        "shell": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run `cmd` with `sh -c`. Placeholders are shell-quoted."
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Kill the command if it runs longer than this."
+        }
+      },
+      "required": [
+        "cmd"
+      ],
+      "additionalProperties": false
+    },
+    "encoder": {
+      "type": "object",
+      "description": "A knob or fader. Every input updates the position; the command runs right away, then at most once per `rate_limit_ms` with the newest value, and always once more when movement stops.",
+      "properties": {
+        "kind": {
+          "const": "Encoder"
+        },
+        "mode": {
+          "enum": [
+            "absolute",
+            "relative_offset64",
+            "relative_twos",
+            "relative_signbit",
+            "relative_offset16"
+          ],
+          "default": "absolute",
+          "description": "How the controller encodes values. `absolute`: 0-127 position. Relative modes: endless encoders sending steps (BeatStep Relative #1 = relative_offset64, #2 = relative_twos, #3 = relative_offset16)."
+        },
+        "map_min": {
+          "type": "number",
+          "default": 0,
+          "description": "Value at the bottom of the range ({value})."
+        },
+        "map_max": {
+          "type": "number",
+          "default": 127,
+          "description": "Value at the top of the range."
+        },
+        "step": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 1,
+          "description": "Relative modes: how much one encoder step moves the value."
+        },
+        "acceleration": {
+          "type": "object",
+          "description": "Relative modes: move further when turning fast.",
+          "properties": {
+            "curve": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 1.5
+            },
+            "max_gain": {
+              "type": "number",
+              "minimum": 1,
+              "default": 4
+            },
+            "slow_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 80,
+              "description": "Steps further apart than this get no acceleration."
+            }
+          },
+          "additionalProperties": false
+        },
+        "wrap": {
+          "type": "boolean",
+          "default": false,
+          "description": "Relative modes: wrap around at the ends of the range instead of stopping."
+        },
+        "rate_limit_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "default": 30,
+          "description": "Minimum time between two command runs."
+        },
+        "deadband": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32,
+          "default": 0,
+          "description": "Absolute mode: ignore reversals this small (in raw 0-127 steps), to stop a noisy pot from flapping."
+        },
+        "initial": {
+          "type": "number",
+          "description": "Starting value; defaults to map_min. Overridden by `state` when present."
+        },
+        "precision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6,
+          "default": 0,
+          "description": "Decimals in {value} and {delta}."
+        },
+        "execute": {
+          "$ref": "#/$defs/exec",
+          "description": "Command to run. Placeholders: {value} (mapped value) and {delta} (signed change since the last run, e.g. +3)."
+        }
+      },
+      "required": [
+        "kind",
+        "execute"
+      ],
+      "additionalProperties": false
+    },
+    "switch": {
+      "type": "object",
+      "description": "A pad or button that toggles between on and off.",
+      "properties": {
+        "kind": {
+          "const": "Switch"
+        },
+        "on": {
+          "$ref": "#/$defs/exec",
+          "description": "Command run when switching to on."
+        },
+        "off": {
+          "$ref": "#/$defs/exec",
+          "description": "Command run when switching to off."
+        },
+        "initial_state": {
+          "enum": [
+            "on",
+            "off"
+          ],
+          "description": "State at startup. Required unless the control has a `state` source."
+        },
+        "debounce_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 50,
+          "description": "Presses closer together than this are ignored."
+        }
+      },
+      "required": [
+        "kind",
+        "on",
+        "off"
+      ],
+      "additionalProperties": false
+    },
+    "trigger": {
+      "type": "object",
+      "description": "A pad or button that runs a command on every press.",
+      "properties": {
+        "kind": {
+          "const": "Trigger"
+        },
+        "execute": {
+          "$ref": "#/$defs/exec",
+          "description": "Command to run. Placeholder: {velocity}."
+        },
+        "debounce_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 50,
+          "description": "Presses closer together than this are ignored."
+        }
+      },
+      "required": [
+        "kind",
+        "execute"
+      ],
+      "additionalProperties": false
+    },
+    "fbvalue": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 127
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Velocity/value (note, cc) or color name (led)."
+    },
+    "miditarget": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 127
+        },
+        "channel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16,
+          "default": 1
+        }
+      },
+      "required": [
+        "number"
+      ],
+      "additionalProperties": false
+    },
+    "feedback": {
+      "type": "object",
+      "description": "What to send back to the device. Set exactly one of led, note, cc or sysex.",
+      "properties": {
+        "led": {
+          "type": "object",
+          "description": "Device-profile LED (needs `output.profile`).",
+          "properties": {
+            "pad": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16
+            },
+            "button": {
+              "enum": [
+                "play",
+                "seq",
+                "sync",
+                "recall",
+                "store",
+                "shift",
+                "chan"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "required": [
+                "pad"
+              ]
+            },
+            {
+              "required": [
+                "button"
+              ]
+            }
+          ]
+        },
+        "note": {
+          "$ref": "#/$defs/miditarget",
+          "description": "Note on (velocity `on`) / note off."
+        },
+        "cc": {
+          "$ref": "#/$defs/miditarget",
+          "description": "CC with value `on`/`off`; for encoders, echoes the value scaled to 0-127."
+        },
+        "sysex": {
+          "type": "object",
+          "description": "Raw SysEx messages as hex strings.",
+          "properties": {
+            "on": {
+              "type": "string"
+            },
+            "off": {
+              "type": "string"
+            },
+            "error": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "on",
+            "off"
+          ],
+          "additionalProperties": false
+        },
+        "on": {
+          "$ref": "#/$defs/fbvalue"
+        },
+        "off": {
+          "$ref": "#/$defs/fbvalue"
+        },
+        "error": {
+          "$ref": "#/$defs/fbvalue"
+        },
+        "flash_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Trigger only: light up for this long on each press."
+        },
+        "while_running": {
+          "type": "boolean",
+          "default": false,
+          "description": "Trigger only: stay lit while the command runs."
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "led"
+          ]
+        },
+        {
+          "required": [
+            "note"
+          ]
+        },
+        {
+          "required": [
+            "cc"
+          ]
+        },
+        {
+          "required": [
+            "sysex"
+          ]
+        }
+      ]
+    },
+    "state": {
+      "type": "object",
+      "description": "A command that reports the real state, so the control follows changes made outside midiboard.",
+      "properties": {
+        "cmd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "shell": {
+          "type": "boolean",
+          "default": false
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2000
+        },
+        "match": {
+          "type": "string",
+          "description": "Switch: regex meaning \"on\" when it matches stdout (otherwise the exit status decides). Encoder: regex whose first group is the number (default: first number in stdout)."
+        },
+        "poll_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "description": "Re-read every this many ms. Without it, state is read at startup, on reconnect and after each switch command."
+        }
+      },
+      "required": [
+        "cmd"
+      ],
+      "additionalProperties": false
+    },
+    "control": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 127,
+          "description": "Note or CC number, as shown by `midiboard listen`."
+        },
+        "type": {
+          "enum": [
+            "note",
+            "cc"
+          ],
+          "description": "Message type, as shown by `midiboard listen`."
+        },
+        "channel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16,
+          "description": "MIDI channel; omit to accept any channel."
+        },
+        "command": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/encoder"
+            },
+            {
+              "$ref": "#/$defs/switch"
+            },
+            {
+              "$ref": "#/$defs/trigger"
+            }
+          ]
+        },
+        "feedback": {
+          "$ref": "#/$defs/feedback"
+        },
+        "state": {
+          "$ref": "#/$defs/state"
+        }
+      },
+      "required": [
+        "key",
+        "type",
+        "command"
+      ],
+      "additionalProperties": false
+    }
+  }
 }

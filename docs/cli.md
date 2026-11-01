@@ -1,163 +1,226 @@
-# CLI docs
+# CLI reference
 
-You can access this information from the CLI itself using the help subcommand or help flag (this document is, in fact, ripped directly from there).
+<!-- Generated from the clap definitions by `UPDATE_DOCS=1 cargo test cli_docs`. Don't edit by hand. -->
 
-<!-- vscode-markdown-toc -->
-* 1. [Usage](#Usage)
-* 2. [Subcommands](#Subcommands)
-* 3. [`config` subcommand](#configsubcommand)
-  * 3.1. [Usage](#Usage-1)
-  * 3.2. [Options](#Options)
-  * 3.3. [Examples](#Examples)
-* 4. [`devices` subcommand](#devicessubcommand)
-  * 4.1. [Usage](#Usage-1)
-  * 4.2. [Options](#Options-1)
-  * 4.3. [Examples](#Examples-1)
-* 5. [`help` subcommand](#helpsubcommand)
-  * 5.1. [Usage](#Usage-1)
-  * 5.2. [Examples](#Examples-1)
-* 6. [`run` subcommand](#runsubcommand)
-  * 6.1. [Usage](#Usage-1)
-  * 6.2. [Options](#Options-1)
-  * 6.3. [Examples](#Examples-1)
+## midiboard
 
-<!-- vscode-markdown-toc-config
-	numbering=true
-	autoSave=true
-	/vscode-markdown-toc-config -->
-<!-- /vscode-markdown-toc -->
+```text
+Run commands from any MIDI 1.0 controller: change the volume with a knob, toggle mute with a pad,
+launch scripts with a button, and light up the controller's LEDs to show what's going on.
 
-## 1. <a name='Usage'></a>Usage
+The config file lives at $XDG_CONFIG_HOME/midiboard/config.json (~/.config/midiboard/config.json)
+unless --path is given.
 
-```bash
- midiboard <SUBCOMMAND>
+Logging defaults to the config's `log_level` for `run` and to `info` otherwise; set RUST_LOG (e.g.
+RUST_LOG=debug) to override.
+
+Usage: midiboard <COMMAND>
+
+Commands:
+  run      Run the service: listen to the configured devices and run commands
+  devices  List MIDI input and output ports [alias: list]
+  listen   Print every message a device sends, decoded as `type`, `channel` and `key`
+  config   Create or check the config file
+  replay   Run a recorded trace through the engine and print what would execute
+  send     Send raw MIDI bytes to an output port, e.g. "90 24 7F" or a SysEx
+  led      Set one LED on an Arturia BeatStep
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
 ```
 
-This utility helps with the execution of frequent or specific tasks to be done using a MIDI controller to execute user-provided commands.
+## midiboard run
 
-It can be used to control audio, system resoruces, or anything that runs off a shell command.
+```text
+Run the service: listen to the configured devices and run commands
 
-## 2. <a name='Subcommands'></a>Subcommands
+Usage: midiboard run [OPTIONS]
 
-| subcommand | Description                                                                           |
-|------------|---------------------------------------------------------------------------------------|
-| `config`   | Manages the configuration file.                                                       |
-| `devices`  | Detects and listens to currently active MIDI devices.                                 |
-| `help`     | Print this message or the help of the given subcommand(s)                             |
-| `run`      | Runs the service, listening to incoming events and executing the given configuration. |
+Options:
+  -p, --path <FILE>
+          Config file to use instead of the default location
 
-## 3. <a name='configsubcommand'></a>`config` subcommand
-
-### 3.1. <a name='Usage-1'></a>Usage
-
-```bash
- midiboard config [OPTIONS]
+  -h, --help
+          Print help
 ```
 
-This command allows you to generate a skeleton for the config file, or devices validity of an existing one.
+## midiboard devices
 
-By default the configuration file will be generated and read from `$HOME`, but you can select an alternative path if desired.
+```text
+List MIDI input and output ports
 
-### 3.2. <a name='Options'></a>Options
+Usage: midiboard devices
 
-| Short | Long         | Takes value | Description                                |
-|-------|--------------|-------------|--------------------------------------------|
-| `-g`  | `--generate` | -           | Generates a skeleton config file.          |
-| `-h`  | `--help`     | -           | Print help information.                    |
-| `-p`  | `--path`     | String      | Selects a custom path for the config file. |
-| `-v`  | `--validate` | -           | Validates the config file.                 |
-
-### 3.3. <a name='Examples'></a>Examples
-
-```bash
- midiboard config --generate
+Options:
+  -h, --help
+          Print help
 ```
 
-```bash
- midiboard config --generate --path ./midiboard.json
+## midiboard listen
+
+```text
+Print every message a device sends, decoded as `type`, `channel` and `key`.
+
+Use it to find the values to put in the config. With --record, also saves a trace that `midiboard
+replay` can run through the engine.
+
+Usage: midiboard listen [OPTIONS] <DEVICE>
+
+Arguments:
+  <DEVICE>
+          Input port (full name, client name, or a unique part of it)
+
+Options:
+  -r, --record <FILE>
+          Save a trace (`t_us,bytes` per line) to FILE
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
-```bash
- midiboard config --validate
+## midiboard config
+
+```text
+Create or check the config file
+
+Usage: midiboard config <COMMAND>
+
+Commands:
+  generate  Write a starter config file [alias: new]
+  validate  Check a config file and report every problem found [alias: check]
+  path      Print the default config location
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help
+          Print help
 ```
 
-```bash
- midiboard config --validate --path ./midiboard.json
+## midiboard config generate
+
+```text
+Write a starter config file
+
+Usage: midiboard config generate [OPTIONS]
+
+Options:
+  -p, --path <FILE>
+          Config file to use instead of the default location
+
+      --force
+          Overwrite an existing file
+
+  -h, --help
+          Print help
 ```
 
-## 4. <a name='devicessubcommand'></a>`devices` subcommand
+## midiboard config validate
 
-### 4.1. <a name='Usage-1'></a>Usage
+```text
+Check a config file and report every problem found
 
-```bash
- midiboard devices [OPTIONS]
+Usage: midiboard config validate [OPTIONS]
+
+Options:
+  -p, --path <FILE>
+          Config file to use instead of the default location
+
+  -h, --help
+          Print help
 ```
 
-This command lets you know what devices you have active, their names, and check if they're working correctly.
+## midiboard config path
 
-It can provide a list of devices, and with a device selected it can output any MIDI event registered. This is useful to know what channels, keys and type of values your device outputs, making easy to fill the config file.
+```text
+Print the default config location
 
-### 4.2. <a name='Options-1'></a>Options
+Usage: midiboard config path
 
-| Short | Long      | Takes value | Description                                                        |
-|-------|-----------|-------------|--------------------------------------------------------------------|
-| `-l`  | `--list`  | -           | Lists active MIDI devices and outputs them to stdout.              |
-| `-h`  | `--help`  | -           | Print help information.                                            |
-| `-i`  | `--input` | String      | Listens to the given MIDI device and outputs all events to stdout. |
-
-### 4.3. <a name='Examples-1'></a>Examples
-
-```bash
- midiboard devices --list
+Options:
+  -h, --help
+          Print help
 ```
 
-```bash
- midiboard devices --input "Arturia Beatstep"
+## midiboard replay
+
+```text
+Run a recorded trace through the engine and print what would execute.
+
+Output is CSV: `t_us,event,raw,position,value`, where `event` is `input` (a message for the control)
+or `exec` (a command run). Plot position and value against time to see latency and smoothing.
+
+Usage: midiboard replay [OPTIONS] --control <CONTROL> <TRACE>
+
+Arguments:
+  <TRACE>
+          Trace recorded with `midiboard listen --record`
+
+Options:
+  -c, --control <CONTROL>
+          Control to report on
+
+      --exec-ms <EXEC_MS>
+          Simulated time each command takes to finish, in milliseconds
+          
+          [default: 5]
+
+  -o, --out <FILE>
+          Write the CSV to FILE instead of stdout
+
+  -p, --path <FILE>
+          Config file to use instead of the default location
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
-## 5. <a name='helpsubcommand'></a>`help` subcommand
+## midiboard send
 
-### 5.1. <a name='Usage-1'></a>Usage
+```text
+Send raw MIDI bytes to an output port, e.g. "90 24 7F" or a SysEx
 
-```bash
- midiboard help <SUBCOMMAND>
+Usage: midiboard send <DEVICE> <BYTES>
+
+Arguments:
+  <DEVICE>
+          Output port (full name, client name, or a unique part of it)
+
+  <BYTES>
+          Hex bytes, separated by spaces
+
+Options:
+  -h, --help
+          Print help
 ```
 
-### 5.2. <a name='Examples-1'></a>Examples
+## midiboard led
 
-```bash
- midiboard help config
-```
+```text
+Set one LED on an Arturia BeatStep
 
-```bash
- midiboard help devices
-```
+Usage: midiboard led [OPTIONS] <DEVICE>
 
-## 6. <a name='runsubcommand'></a>`run` subcommand
+Arguments:
+  <DEVICE>
+          Output port of the BeatStep
 
-### 6.1. <a name='Usage-1'></a>Usage
+Options:
+      --pad <PAD>
+          Pad number, 1-16
 
-```bash
- midiboard run [OPTIONS]
-```
+      --button <BUTTON>
+          Function button: play, seq, sync, recall, store, shift or chan
 
-Executes given commands on defined MIDI events according to the config file.
+      --color <COLOR>
+          off, red, blue or magenta
+          
+          [default: red]
 
-By default the configuration file will be generated and read from $HOME, but you can select an alternative path if desired.
-
-### 6.2. <a name='Options-1'></a>Options
-
-| Short | Long     | Takes value | Description                                |
-|-------|----------|-------------|--------------------------------------------|
-| `-p`  | `--path` | String      | Selects a custom path for the config file. |
-| `-h`  | `--help` | -           | Print help information.                    |
-
-### 6.3. <a name='Examples-1'></a>Examples
-
-```bash
- midiboard run
-```
-
-```bash
- midiboard run --path ./midiboard.json
+  -h, --help
+          Print help
 ```
