@@ -17,6 +17,9 @@ use tracing::{debug, info, warn};
 const TRIGGER_QUEUE_MAX: u8 = 4;
 const ERROR_FLASH: Duration = Duration::from_millis(500);
 const STATE_WARN_EVERY: Duration = Duration::from_secs(60);
+/// When an encoder's state read was discarded and there's no regular poll,
+/// read again after this long (longer than `recently_active`'s quiet time).
+const STALE_RETRY: Duration = Duration::from_millis(500);
 
 static FIRST_NUMBER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"-?\d+(?:\.\d+)?").expect("static regex is valid"));
 
@@ -284,8 +287,11 @@ impl Engine {
             if let Signal::Value(v) = signal {
                 let slot = &mut self.slots[i];
                 if let (Kind::Encoder(st), Behavior::Encoder(spec)) = (&mut slot.kind, &slot.ctl.behavior) {
-                    st.input(spec, now, v);
-                    slot.epoch += 1;
+                    // Only real movement makes a pending state read stale;
+                    // zero ticks and rejected jitter don't.
+                    if st.input(spec, now, v) {
+                        slot.epoch += 1;
+                    }
                 }
                 // Execution, if due, happens in run_timers.
             }
@@ -467,10 +473,13 @@ impl Engine {
         if slot.state_epoch != slot.epoch {
             // Started before a command ran or the knob moved: the result may
             // describe the old state. Switches re-read so the LED is
-            // confirmed; encoders wait for the next poll.
+            // confirmed; encoders read again once the knob has settled (the
+            // regular poll does that, or a one-off retry without one).
             debug!(control = %name, "discarding a stale state read");
             if matches!(slot.kind, Kind::Switch { .. }) && !slot.in_flight {
                 self.start_state_read(i, now, out);
+            } else if matches!(slot.kind, Kind::Encoder(_)) && src.poll.is_none() {
+                slot.next_poll = Some(now + STALE_RETRY);
             }
             return;
         }
@@ -829,6 +838,39 @@ mod tests {
         assert_eq!(e.position(0), Some(60.0));
         e.handle(ms(1400), state_done(0, "50")); // sampled at t=1000
         assert_eq!(e.position(0), Some(60.0));
+    }
+
+    #[test]
+    fn no_op_encoder_input_does_not_starve_state_sync() {
+        // Found in second review: zero ticks bumped the epoch.
+        let dev = device(
+            r#""v":{"key":1,"type":"cc","command":{"kind":"Encoder","mode":"relative_offset64","map_max":100,"execute":{"cmd":"set"}},
+                "state":{"cmd":"get","poll_ms":1000}}"#,
+        );
+        let mut e = Engine::new(&dev);
+        e.startup(ms(0));
+        e.handle(ms(5), Input::Midi(MidiMsg::ControlChange { channel: 1, controller: 1, value: 64 }));
+        e.handle(ms(10), state_done(0, "55"));
+        assert_eq!(e.position(0), Some(55.0));
+    }
+
+    #[test]
+    fn discarded_startup_read_is_retried_without_poll() {
+        let dev = device(
+            r#""v":{"key":1,"type":"cc","command":{"kind":"Encoder","mode":"relative_offset64","map_max":100,"execute":{"cmd":"set"}},
+                "state":{"cmd":"get"}}"#,
+        );
+        let mut e = Engine::new(&dev);
+        e.startup(ms(0));
+        e.handle(ms(5), Input::Midi(MidiMsg::ControlChange { channel: 1, controller: 1, value: 65 }));
+        e.handle(ms(10), done(0, true));
+        e.handle(ms(20), state_done(0, "50")); // stale: discarded
+        assert_eq!(e.position(0), Some(1.0));
+        let a = e.handle(ms(520), Input::Tick);
+        assert!(a.iter().any(|x| matches!(x, Action::Run { job: Job::State, .. })), "retried");
+        e.handle(ms(530), state_done(0, "50"));
+        assert_eq!(e.position(0), Some(50.0));
+        assert_eq!(e.next_deadline(), None, "no further polling without poll_ms");
     }
 
     #[test]

@@ -144,6 +144,9 @@ fn device_thread(device: Device, tx: Sender<Event>, rx: Receiver<Event>) -> Resu
     let mut engine = Engine::new(&device);
     // A long-lived client used only to notice when the port goes away.
     let watcher = MidiInput::new("midiboard-watch").context("could not open the MIDI backend")?;
+    // Likewise for the output: probe with one client instead of creating a
+    // new one every second while the output port is missing.
+    let out_watcher = MidiOutput::new("midiboard-watch").context("could not open the MIDI backend")?;
     let mut warned_missing = false;
 
     loop {
@@ -219,7 +222,8 @@ fn device_thread(device: Device, tx: Sender<Event>, rx: Receiver<Event>) -> Resu
                     break true;
                 }
                 if session.output.is_none()
-                    && device.output_port.is_some()
+                    && let Some(port) = &device.output_port
+                    && midi::select_port(&output_port_names(&out_watcher), port).is_ok()
                     && let Some(out) = try_open_output(&device, false)
                 {
                     info!(device = %device.name, "output port available; feedback enabled");

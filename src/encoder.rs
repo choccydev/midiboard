@@ -67,6 +67,10 @@ pub struct EncoderState {
     last_exec_at: Option<Time>,
     last_exec_rendered: String,
     last_exec_value: f64,
+    /// Unwrapped running position, so `{delta}` stays correct with `wrap`
+    /// even when the knob moves more than half the range between runs.
+    total: f64,
+    last_exec_total: f64,
     dirty: bool,
 }
 
@@ -82,6 +86,8 @@ impl EncoderState {
             last_exec_at: None,
             last_exec_rendered: render(initial, spec.precision),
             last_exec_value: initial,
+            total: initial,
+            last_exec_total: initial,
             dirty: false,
         }
     }
@@ -129,7 +135,9 @@ impl EncoderState {
             }
             let dt = self.last_tick.map(|t| now.saturating_sub(t));
             self.last_tick = Some(now);
-            let next = self.pos + f64::from(ticks) * spec.step * Self::gain(spec, dt);
+            let step = f64::from(ticks) * spec.step * Self::gain(spec, dt);
+            let next = self.pos + step;
+            self.total += step;
             self.pos = if spec.wrap {
                 spec.min + (next - spec.min).rem_euclid(spec.max - spec.min)
             } else if spec.unbounded {
@@ -162,23 +170,20 @@ impl EncoderState {
         self.dirty = false;
         let value = round_to(self.pos, spec.precision);
         let rendered = render(value, spec.precision);
-        if rendered == self.last_exec_rendered {
+        let delta = if spec.wrap {
+            round_to(self.total, spec.precision) - self.last_exec_total
+        } else {
+            value - self.last_exec_value
+        };
+        // With wrap, a whole turn renders the same value but still moved.
+        if rendered == self.last_exec_rendered && (!spec.wrap || delta == 0.0) {
             return None;
-        }
-        let mut delta = value - self.last_exec_value;
-        if spec.wrap {
-            // Report the short way round: 99 -> 0 on a 0..100 range is +1.
-            let range = spec.max - spec.min;
-            if delta > range / 2.0 {
-                delta -= range;
-            } else if delta < -range / 2.0 {
-                delta += range;
-            }
         }
         let delta_s = render(delta, spec.precision);
         let delta_s = if delta_s.starts_with('-') { delta_s } else { format!("+{delta_s}") };
         self.last_exec_at = Some(now);
         self.last_exec_value = value;
+        self.last_exec_total = round_to(self.total, spec.precision);
         self.last_exec_rendered = rendered.clone();
         Some(Emission { value: rendered, delta: delta_s })
     }
@@ -195,6 +200,8 @@ impl EncoderState {
         self.pos = value.clamp(spec.min, spec.max);
         let v = round_to(self.pos, spec.precision);
         self.last_exec_value = v;
+        self.total = self.pos;
+        self.last_exec_total = v;
         self.last_exec_rendered = render(v, spec.precision);
         self.last_raw = None;
         self.last_dir = 0;
@@ -328,6 +335,23 @@ mod tests {
         assert_eq!(st.take(&s, ms(0)), Some(Emission { value: "0".into(), delta: "+1".into() }));
         st.input(&s, ms(1), 63);
         assert_eq!(st.take(&s, ms(40)), Some(Emission { value: "99".into(), delta: "-1".into() }));
+    }
+
+    #[test]
+    fn wrap_delta_survives_big_moves_between_runs() {
+        // Found in second review: +200 on 0..360 was reported as -160.
+        let mut s = spec(EncoderMode::RelativeOffset64);
+        s.max = 360.0;
+        s.step = 5.0;
+        s.wrap = true;
+        let mut st = EncoderState::new(&s);
+        st.input(&s, ms(0), 64 + 40);
+        assert_eq!(st.take(&s, ms(0)), Some(Emission { value: "200".into(), delta: "+200".into() }));
+        // A whole turn renders the same value but must still run.
+        for k in 0..72 {
+            st.input(&s, ms(100 + k), 65);
+        }
+        assert_eq!(st.take(&s, ms(300)), Some(Emission { value: "200".into(), delta: "+360".into() }));
     }
 
     #[test]

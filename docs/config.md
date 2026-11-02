@@ -134,7 +134,15 @@ Commands have no timeout unless you set `timeout_ms`. A command that hangs
 (for example `osascript` waiting on a permission prompt) keeps its control busy
 until it exits, so set a timeout on anything that might hang. Commands that
 start something in the background (`app &`, `xdg-open`) are fine: midiboard
-stops waiting shortly after the command itself exits.
+stops waiting shortly after the command itself exits, keeping the output
+printed until then.
+
+Each command runs in its own process group, so a timeout also stops anything
+the command started. It also means commands aren't attached to your terminal
+when you run `midiboard run` interactively: Ctrl-C stops midiboard but not a
+command that's still running, and commands can't prompt for input (a `sudo`
+password prompt would stop and hang). Commands meant for a daemon shouldn't
+prompt anyway; use `timeout_ms` for anything that might.
 
 | Placeholder | Available in | Value |
 |---|---|---|

@@ -3,6 +3,7 @@
 use crate::engine::{Job, Outcome, Rendered};
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -51,22 +52,37 @@ pub fn run(job: Job, exec: &Rendered) -> Outcome {
     };
 
     // Read both pipes on their own threads so a chatty command can't fill a
-    // pipe buffer and deadlock while we wait for it. Results come back over a
-    // channel so we can stop waiting for them.
-    let (tx, rx) = crossbeam_channel::bounded::<(bool, String)>(2);
-    let reader = |is_err: bool, pipe: Option<Box<dyn Read + Send>>| {
-        let tx = tx.clone();
+    // pipe buffer and deadlock while we wait for it. Output is collected
+    // incrementally, so whatever arrived before we stop waiting is kept.
+    // Once abandoned (a background process still holds the pipe), readers
+    // keep draining so that process doesn't block, but stop storing.
+    let abandoned = Arc::new(AtomicBool::new(false));
+    let (eof_tx, eof_rx) = crossbeam_channel::bounded::<()>(2);
+    let reader = |pipe: Option<Box<dyn Read + Send>>| -> Arc<Mutex<Vec<u8>>> {
+        let buf = Arc::new(Mutex::new(Vec::new()));
+        let (buf2, abandoned, eof_tx) = (Arc::clone(&buf), Arc::clone(&abandoned), eof_tx.clone());
         thread::spawn(move || {
-            let mut buf = Vec::new();
             if let Some(mut p) = pipe {
-                let _ = p.read_to_end(&mut buf);
+                let mut chunk = [0u8; 8192];
+                loop {
+                    match p.read(&mut chunk) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) if !abandoned.load(Ordering::Relaxed) => {
+                            if let Ok(mut b) = buf2.lock() {
+                                b.extend_from_slice(&chunk[..n]);
+                            }
+                        }
+                        Ok(_) => {}
+                    }
+                }
             }
-            let _ = tx.send((is_err, String::from_utf8_lossy(&buf).into_owned()));
+            let _ = eof_tx.send(());
         });
+        buf
     };
-    reader(false, child.stdout.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
-    reader(true, child.stderr.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
-    drop(tx);
+    let out_buf = reader(child.stdout.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+    let err_buf = reader(child.stderr.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+    drop(eof_tx);
 
     let started = Instant::now();
     let status = loop {
@@ -87,18 +103,18 @@ pub fn run(job: Job, exec: &Rendered) -> Outcome {
         thread::sleep(Duration::from_millis(5));
     };
 
-    let (mut stdout, mut stderr) = (String::new(), String::new());
     let deadline = Instant::now() + OUTPUT_GRACE;
     for _ in 0..2 {
-        match rx.recv_deadline(deadline) {
-            Ok((false, s)) => stdout = s,
-            Ok((true, s)) => stderr = s,
-            Err(_) => {
-                debug!(control = %exec.control, "output still open after exit (background process?); not waiting");
-                break;
-            }
+        if eof_rx.recv_deadline(deadline).is_err() {
+            debug!(control = %exec.control, "output still open after exit (background process?); not waiting");
+            break;
         }
     }
+    abandoned.store(true, Ordering::Relaxed);
+    let take = |b: &Arc<Mutex<Vec<u8>>>| {
+        b.lock().map(|mut v| String::from_utf8_lossy(&std::mem::take(&mut *v)).into_owned()).unwrap_or_default()
+    };
+    let (stdout, stderr) = (take(&out_buf), take(&err_buf));
 
     let success = status.is_some_and(|s| s.success());
     let quiet = job == Job::State;
@@ -180,6 +196,21 @@ mod tests {
         let o = run(Job::Command, &r("sh", &["-c", "sleep 3 &"], Some(500)));
         assert!(o.success);
         assert!(started.elapsed() < Duration::from_secs(1), "took {:?}", started.elapsed());
+    }
+
+    #[test]
+    fn output_before_a_background_process_is_kept() {
+        // Found in second review: all output was dropped when a background
+        // process held the pipe.
+        let o = run(Job::State, &r("sh", &["-c", "echo on; sleep 2 &"], None));
+        assert!(o.success);
+        assert_eq!(o.stdout.trim(), "on");
+    }
+
+    #[test]
+    fn large_output_is_complete() {
+        let o = run(Job::State, &r("sh", &["-c", "head -c 3000000 /dev/zero | tr '\\0' a"], None));
+        assert_eq!(o.stdout.len(), 3_000_000);
     }
 
     #[test]
