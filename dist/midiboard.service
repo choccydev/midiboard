@@ -1,0 +1,25 @@
+# systemd user unit. Install with:
+#   mkdir -p ~/.config/systemd/user
+#   cp midiboard.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now midiboard
+#
+# It runs in your user session, so commands like pactl, wpctl and playerctl
+# can reach your audio server and D-Bus session bus.
+
+[Unit]
+Description=Midiboard MIDI controller daemon
+Documentation=https://github.com/choccydev/midiboard/tree/master/docs
+After=pipewire.service pulseaudio.service
+StartLimitIntervalSec=200
+StartLimitBurst=5
+
+[Service]
+Type=exec
+# Adjust if you installed somewhere else (e.g. /usr/local/bin/midiboard).
+ExecStart=%h/.cargo/bin/midiboard run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

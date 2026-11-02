@@ -1,0 +1,84 @@
+{
+    "$schema": "https://raw.githubusercontent.com/choccydev/midiboard/master/schema/midiboard.schema.json",
+    "config_version": 2,
+    "log_level": "info",
+    "devices": [
+        {
+            "name": "Arturia BeatStep",
+            "output": {
+                "profile": "beatstep",
+                "take_over_pads": true
+            },
+            "controls": {
+                "volume": {
+                    "key": 7,
+                    "type": "cc",
+                    "command": {
+                        "kind": "Encoder",
+                        "mode": "relative_offset64",
+                        "map_min": 0,
+                        "map_max": 100,
+                        "acceleration": { "curve": 1.5, "max_gain": 4 },
+                        "rate_limit_ms": 40,
+                        "execute": {
+                            "cmd": "osascript",
+                            "args": ["-e", "set volume output volume {value}"]
+                        }
+                    },
+                    "state": {
+                        "cmd": "osascript",
+                        "args": ["-e", "output volume of (get volume settings)"],
+                        "poll_ms": 5000
+                    }
+                },
+                "mute": {
+                    "key": 36,
+                    "type": "note",
+                    "command": {
+                        "kind": "Switch",
+                        "on": { "cmd": "osascript", "args": ["-e", "set volume with output muted"] },
+                        "off": { "cmd": "osascript", "args": ["-e", "set volume without output muted"] }
+                    },
+                    "state": {
+                        "cmd": "osascript",
+                        "args": ["-e", "output muted of (get volume settings)"],
+                        "match": "true",
+                        "poll_ms": 2000
+                    },
+                    "feedback": {
+                        "led": { "pad": 1 },
+                        "on": "red",
+                        "off": "off",
+                        "error": "magenta"
+                    }
+                },
+                "play_pause": {
+                    "key": 38,
+                    "type": "note",
+                    "command": {
+                        "kind": "Trigger",
+                        "execute": { "cmd": "osascript", "args": ["-e", "tell application \"Music\" to playpause"] }
+                    },
+                    "feedback": {
+                        "led": { "pad": 3 },
+                        "on": "blue",
+                        "flash_ms": 150
+                    }
+                },
+                "next_track": {
+                    "key": 39,
+                    "type": "note",
+                    "command": {
+                        "kind": "Trigger",
+                        "execute": { "cmd": "osascript", "args": ["-e", "tell application \"Music\" to next track"] }
+                    },
+                    "feedback": {
+                        "led": { "pad": 4 },
+                        "on": "red",
+                        "flash_ms": 150
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,41 +1,28 @@
 {
-    "$schema": "https://raw.githubusercontent.com/aordano/control-board/master/schema/midiboard.schema.json",
-    "log_level": "Warn",
-    "config": [
+    "$schema": "https://raw.githubusercontent.com/choccydev/midiboard/master/schema/midiboard.schema.json",
+    "config_version": 2,
+    "log_level": "warn",
+    "devices": [
         {
-            "device": "Your Device Here",
-            "thresholds": {
-                "encoder": {
-                    "activation": 300,
-                    "detection": 40
-                },
-                "switch": {
-                    "activation": 400
-                },
-                "trigger": {
-                    "activation": 1000
-                }
-            },
+            "name": "Your Device Here",
             "controls": {
                 "volume": {
                     "key": 7,
+                    "type": "cc",
                     "command": {
                         "kind": "Encoder",
+                        "mode": "absolute",
+                        "map_min": 0,
+                        "map_max": 100,
                         "execute": {
                             "cmd": "pactl",
-                            "args": [
-                                "set-sink-volume",
-                                "@DEFAULT_SINK@",
-                                "@VOLUME_PERCENT@%"
-                            ],
-                            "replace": "@VOLUME_PERCENT@",
-                            "map_max": 101,
-                            "map_min": 0
+                            "args": ["set-sink-volume", "@DEFAULT_SINK@", "{value}%"]
                         }
                     }
                 },
-                "pause": {
+                "play_pause": {
                     "key": 45,
+                    "type": "note",
                     "command": {
                         "kind": "Trigger",
                         "execute": {

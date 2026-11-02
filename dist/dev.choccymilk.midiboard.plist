@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd agent for macOS. Install with:
+    sed "s|@HOME@|$HOME|g" dev.choccymilk.midiboard.plist > ~/Library/LaunchAgents/dev.choccymilk.midiboard.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.choccymilk.midiboard.plist
+  Stop it with:
+    launchctl bootout gui/$(id -u)/dev.choccymilk.midiboard
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.choccymilk.midiboard</string>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Adjust if you installed somewhere else (e.g. /opt/homebrew/bin/midiboard). -->
+        <string>@HOME@/.cargo/bin/midiboard</string>
+        <string>run</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- launchd starts with a minimal PATH; commands in the config need to be found. -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+    <key>StandardOutPath</key>
+    <string>@HOME@/Library/Logs/midiboard.log</string>
+    <key>StandardErrorPath</key>
+    <string>@HOME@/Library/Logs/midiboard.log</string>
+</dict>
+</plist>

@@ -1,25 +1,38 @@
 [package]
 name = "midiboard"
-version = "0.3.3"
-edition = "2021"
+version = "0.5.0"
+edition = "2024"
 license = "MIT"
-description = "CLI tool to trigger arbitrary commands using any MIDI 1.0 compatible device."
-homepage = "https://github.com/aordano/midiboard"
-repository = "https://github.com/aordano/midiboard"
-documentation = "https://github.com/aordano/midiboard/tree/master/docs"
+authors = ["Agata Ordano <gh@choccymilk.dev>"]
+description = "Run commands from any MIDI 1.0 controller, with encoder handling and LED feedback."
+homepage = "https://github.com/choccydev/midiboard"
+repository = "https://github.com/choccydev/midiboard"
+documentation = "https://github.com/choccydev/midiboard/tree/master/docs"
 readme = "README.md"
+keywords = ["midi", "controller", "automation", "cli"]
+categories = ["command-line-utilities", "multimedia::audio"]
+exclude = [".github/"]
 
 [dependencies]
-midir = "0.8.0"
-clap = "4.0.18"
-config = "0.13.1"
-serde = "1.0.39"
-home = "0.5.3"
-colored = "2.0.0"
-rust-embed = "6.4.0"
-anyhow = "1.0.64"
-chrono = "0.4.22"
+anyhow = "1"
+clap = { version = "4.6", features = ["derive", "wrap_help"] }
+crossbeam-channel = "0.5"
+ctrlc = { version = "3", features = ["termination"] }
+home = "0.5"
+midir = "0.11"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
-tempfile = "3.3.0"
-rand = "0.8.5"
+jsonschema = { version = "0.33", default-features = false }
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+strip = true
